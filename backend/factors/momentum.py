@@ -56,13 +56,13 @@ def compute_momentum(history: Dict[str, pd.DataFrame], top_spot: Optional[pd.Dat
     """
     rows: List[dict] = []
     
-    for code, df in history.items():
+    for symbol, df in history.items():
         if df is None or df.empty or len(df) < 2:
             continue
         
         momentum = calculate_momentum_simple(df)
         rows.append({
-            "代码": code, 
+            "symbol": symbol, 
             "动量因子": momentum
         })
     

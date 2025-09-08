@@ -12,9 +12,8 @@ dependencies = [
     "numpy",
     "sqlmodel",
     "requests",
-    # Optional: use AkShare if available for real market data
-    # "akshare",
-    "akshare>=1.17.44",
+    "pybit",
+    "python-dotenv",
 ]
 [tool.uv]
 dev-dependencies = [

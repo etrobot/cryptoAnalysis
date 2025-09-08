@@ -32,7 +32,7 @@ export function PWAInstallPrompt() {
             <h3 className="font-medium text-gray-900">安装应用</h3>
           </div>
           <p className="text-sm text-gray-600 mb-3">
-            将股票分析系统添加到主屏幕，获得更好的使用体验
+            将Crypto分析系统添加到主屏幕，获得更好的使用体验
           </p>
           <div className="flex space-x-2">
             <button

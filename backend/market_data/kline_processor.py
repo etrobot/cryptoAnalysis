@@ -18,7 +18,7 @@ def calculate_and_save_weekly_data(stock_codes: List[str], task_id: str = None):
     
     with Session(engine) as session:
         for code in stock_codes:
-            # 获取该股票的所有日K数据
+            # 获取该Crypto的所有日K数据
             stmt = select(DailyMarketData).where(
                 DailyMarketData.code == code
             ).order_by(DailyMarketData.date)
@@ -99,7 +99,7 @@ def calculate_and_save_monthly_data(stock_codes: List[str], task_id: str = None)
     
     with Session(engine) as session:
         for code in stock_codes:
-            # 获取该股票的所有日K数据
+            # 获取该Crypto的所有日K数据
             stmt = select(DailyMarketData).where(
                 DailyMarketData.code == code
             ).order_by(DailyMarketData.date)

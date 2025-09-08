@@ -48,7 +48,7 @@ def compute_support(history: Dict[str, pd.DataFrame], top_spot: Optional[pd.Data
     """
     rows: List[dict] = []
     
-    for code, df in history.items():
+    for symbol, df in history.items():
         # Require at least window_size + 1 days for meaningful analysis (extra day for previous close)
         if df is None or df.empty or len(df) < window_size + 1:
             continue
@@ -93,7 +93,7 @@ def compute_support(history: Dict[str, pd.DataFrame], top_spot: Optional[pd.Data
         support_factor = support_factor_base * price_ratio
         
         rows.append({
-            "代码": code, 
+            "symbol": symbol, 
             "支撑因子": support_factor,
             f"最长K线天数_{window_size}日": days_from_longest,
         })

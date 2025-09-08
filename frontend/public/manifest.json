@@ -1,7 +1,7 @@
 {
-  "name": "股票分析系统",
-  "short_name": "股票分析",
-  "description": "专业的股票因子分析和概念板块分析系统",
+  "name": "Crypto分析系统",
+  "short_name": "Crypto分析",
+  "description": "专业的Crypto因子分析和概念板块分析系统",
   "start_url": "/",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen"],

@@ -66,7 +66,7 @@ export class AuthService {
   static async authenticate(username: string, email: string): Promise<{ success: boolean; error?: string }> {
     try {
       // Use the same API base URL logic as the api service
-      const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000'
+      const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:14250'
       
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',

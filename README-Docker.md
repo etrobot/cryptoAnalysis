@@ -7,7 +7,7 @@
 ### 前提条件
 - 已安装Docker和Docker Compose
 - 已安装并配置Traefik
-- 域名 `a.subx.fun` 指向服务器
+- 域名 `btc.subx.fun` 指向服务器
 
 ### 部署步骤
 
@@ -20,7 +20,7 @@
 2. **访问应用**
    - 本地测试: http://localhost:61125
    - 本地API文档: http://localhost:61125/docs
-   - 生产环境: https://a.subx.fun
+   - 生产环境: https://btc.subx.fun
 
 ## 配置说明
 
@@ -33,7 +33,7 @@
 ```yaml
 labels:
   - "traefik.enable=true"
-  - "traefik.http.routers.quant.rule=Host(`a.subx.fun`)"
+  - "traefik.http.routers.quant.rule=Host(`btc.subx.fun`)"
   - "traefik.http.routers.quant.entrypoints=websecure"
   - "traefik.http.routers.quant.tls.certresolver=letsencrypt"
   - "traefik.http.services.quant.loadbalancer.server.port=8000"
