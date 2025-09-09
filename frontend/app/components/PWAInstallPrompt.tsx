@@ -28,7 +28,7 @@ export function PWAInstallPrompt() {
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-2">
-            <Download size={20} className="text-indigo-600 dark:text-indigo-400" />
+            <Download size={20} className="text-teal-600 dark:text-teal-400" />
             <h3 className="font-medium text-foreground dark:text-gray-200">安装应用</h3>
           </div>
           <p className="text-sm text-muted-foreground mb-3 dark:text-gray-400">
@@ -37,7 +37,7 @@ export function PWAInstallPrompt() {
           <div className="flex space-x-2">
             <button
               onClick={handleInstall}
-              className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 transition-colors dark:bg-indigo-700 dark:hover:bg-indigo-600"
+              className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors dark:bg-teal-700 dark:hover:bg-teal-600"
             >
               安装
             </button>

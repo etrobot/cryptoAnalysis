@@ -11,6 +11,36 @@ logger = logging.getLogger(__name__)
 
 session = HTTP(testnet=False)
 
+def get_spot_tickers():
+    """获取现货tickers，包含24h成交额等指标，用于按成交额排序"""
+    try:
+        result = session.get_tickers(category="spot")
+        if result.get('retCode') == 0:
+            items = result['result']['list']
+            df = pd.DataFrame(items)
+            # 保留我们需要的字段
+            cols = [
+                'symbol',
+                'lastPrice',
+                'highPrice24h',
+                'lowPrice24h',
+                'volume24h',
+                'turnover24h'
+            ]
+            for c in cols:
+                if c not in df.columns:
+                    df[c] = None
+            # 数值字段转成数值类型
+            for c in ['lastPrice', 'highPrice24h', 'lowPrice24h', 'volume24h', 'turnover24h']:
+                df[c] = pd.to_numeric(df[c], errors='coerce')
+            return df[cols]
+        else:
+            logger.error(f"Failed to get spot tickers: {result.get('retMsg')}")
+            return pd.DataFrame()
+    except Exception as e:
+        logger.error(f"Exception in get_spot_tickers: {e}")
+        return pd.DataFrame()
+
 def get_symbols():
     """获取所有可用的交易对"""
     try:
@@ -30,7 +60,7 @@ def get_symbols():
         logger.error(f"Exception in get_symbols: {e}")
         return pd.DataFrame()
 
-def get_kline(symbol: str, start_date: date, end_date: date) -> pd.DataFrame:
+def get_kline(symbol: str, start_date: date, end_date: date, interval: str = "D") -> pd.DataFrame:
     """获取K线数据"""
     try:
         start_ts = int(datetime.combine(start_date, datetime.min.time()).timestamp() * 1000)
@@ -42,7 +72,7 @@ def get_kline(symbol: str, start_date: date, end_date: date) -> pd.DataFrame:
             result = session.get_kline(
                 category="spot",
                 symbol=symbol,
-                interval="D",  # Daily kline
+                interval=interval,
                 start=start_ts,
                 limit=1000 
             )
@@ -60,8 +90,15 @@ def get_kline(symbol: str, start_date: date, end_date: date) -> pd.DataFrame:
                 all_klines.extend(unique_klines)
                 # bybit returns from oldest to newest, so the last one is the newest
                 last_ts = int(klines[-1][0])
-                # move to the next day
-                start_ts = last_ts + (24 * 60 * 60 * 1000)
+                # move forward by interval
+                if interval == "D":
+                    step_ms = 24 * 60 * 60 * 1000
+                elif interval == "60":
+                    step_ms = 60 * 60 * 1000
+                else:
+                    # default to daily step
+                    step_ms = 24 * 60 * 60 * 1000
+                start_ts = last_ts + step_ms
             else:
                 break
         

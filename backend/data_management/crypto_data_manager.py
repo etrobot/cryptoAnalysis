@@ -7,7 +7,7 @@ from typing import List, Dict, Optional
 import pandas as pd
 from sqlmodel import Session, select
 from models import (
-    engine, CryptoSymbol, DailyMarketData
+    engine, CryptoSymbol, DailyMarketData, HourlyMarketData
 )
 
 logger = logging.getLogger(__name__)
@@ -94,6 +94,46 @@ def save_daily_data(history_data: Dict[str, pd.DataFrame]):
     logger.info(f"Saved {total_saved} daily market data records")
     return total_saved
 
+
+def save_hourly_data(history_data: Dict[str, pd.DataFrame]):
+   """保存1小时K线数据到数据库"""
+   total_saved = 0
+
+   with Session(engine) as session:
+       for symbol, df in history_data.items():
+           if df is None or df.empty:
+               continue
+
+           for _, row in df.iterrows():
+               # df['date'] 是 pandas 的 datetime64[ns]
+               record_dt = pd.to_datetime(row["date"]).to_pydatetime().replace(minute=0, second=0, microsecond=0)
+               existing = session.exec(
+                   select(HourlyMarketData).where(
+                       HourlyMarketData.symbol == symbol,
+                       HourlyMarketData.datetime == record_dt
+                   )
+               ).first()
+
+               if existing is None:
+                   hourly = HourlyMarketData(
+                       symbol=symbol,
+                       datetime=record_dt,
+                       open_price=float(row.get("open", 0)),
+                       high_price=float(row.get("high", 0)),
+                       low_price=float(row.get("low", 0)),
+                       close_price=float(row.get("close", 0)),
+                       volume=float(row.get("volume", 0)),
+                       amount=float(row.get("turnover", 0)),
+                       change_pct=float(row.get("change_pct", 0)),
+                   )
+                   session.add(hourly)
+                   total_saved += 1
+
+       session.commit()
+
+   logger.info(f"Saved {total_saved} hourly market data records")
+   return total_saved
+
 def save_crypto_symbol_info(symbols_data: pd.DataFrame):
     """保存加密货币交易对基本信息"""
     total_saved = 0
@@ -153,4 +193,35 @@ def load_daily_data_for_analysis(symbols: List[str], limit: int = 60) -> Dict[st
                 history_data[symbol] = df
     
     logger.info(f"Loaded daily data for {len(history_data)} symbols from database")
+    return history_data
+
+
+def load_hourly_data_for_analysis(symbols: List[str], limit: int = 24*90) -> Dict[str, pd.DataFrame]:
+    """从数据库加载小时K数据用于因子分析（默认近90天=2160根）"""
+    history_data: Dict[str, pd.DataFrame] = {}
+
+    with Session(engine) as session:
+        for symbol in symbols:
+            stmt = select(HourlyMarketData).where(
+                HourlyMarketData.symbol == symbol
+            ).order_by(HourlyMarketData.datetime.desc()).limit(limit)
+
+            hourly_records = session.exec(stmt).all()
+            if hourly_records:
+                df = pd.DataFrame([r.dict() for r in hourly_records])
+                df['datetime'] = pd.to_datetime(df['datetime'])
+                df = df.rename(columns={
+                    'datetime': '日期',
+                    'open_price': '开盘',
+                    'high_price': '最高',
+                    'low_price': '最低',
+                    'close_price': '收盘',
+                    'volume': '成交量',
+                    'amount': '成交额',
+                    'change_pct': '涨跌幅'
+                })
+                df = df.sort_values("日期")
+                history_data[symbol] = df
+
+    logger.info(f"Loaded hourly data for {len(history_data)} symbols from database")
     return history_data

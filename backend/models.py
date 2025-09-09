@@ -34,7 +34,7 @@ class Task(BaseModel):
 
 
 class RunRequest(BaseModel):
-    top_n: int = 100
+    top_n: int = 50
     selected_factors: Optional[List[str]] = None
     collect_latest_data: bool = True
 
@@ -142,6 +142,22 @@ class MonthlyMarketData(SQLModel, table=True):
     volume: float = Field(description="成交量")
     amount: Optional[float] = Field(description="成交额")
     change_pct: float = Field(description="涨跌百分比")
+
+
+class HourlyMarketData(SQLModel, table=True):
+   """小时行情表 (UTC)"""
+   __tablename__ = "hourly_market_data"
+
+   id: Optional[int] = Field(default=None, primary_key=True)
+   symbol: str = Field(foreign_key="crypto_symbol.symbol", description="交易对", index=True)
+   datetime: dt_datetime = Field(description="时间(UTC)", index=True)
+   open_price: float = Field(description="开盘价")
+   high_price: float = Field(description="最高价")
+   low_price: float = Field(description="最低价")
+   close_price: float = Field(description="收盘价")
+   volume: float = Field(description="成交量")
+   amount: Optional[float] = Field(description="成交额")
+   change_pct: float = Field(description="涨跌百分比")
 
 
 # 数据库连接配置
