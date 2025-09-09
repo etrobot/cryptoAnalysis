@@ -40,6 +40,8 @@ def stop_analysis(task_id: str) -> TaskResult:
     # Reflect status change immediately; the worker will mark completed/cancelled later.
     task.status = TaskStatus.RUNNING  # keep running until worker finalizes
     task.message = "已请求停止，正在清理..."
+    from utils import bump_task_version
+    bump_task_version(task_id)
     return TaskResult(
         task_id=task.task_id,
         status=task.status,
@@ -61,6 +63,7 @@ def get_task_status(task_id: str) -> TaskResult:
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
+    # Note: this endpoint is kept for compatibility/polling but SSE is preferred.
     return TaskResult(
         task_id=task.task_id,
         status=task.status,

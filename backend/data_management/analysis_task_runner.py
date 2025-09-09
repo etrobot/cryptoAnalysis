@@ -39,11 +39,15 @@ def run_analysis_task(task_id: str, top_n: int, selected_factors: Optional[List[
             task.message = "任务已取消"
             task.completed_at = datetime.now().isoformat()
             logger.info(f"Task {task_id} cancelled by user")
+            from utils import bump_task_version
+            bump_task_version(task_id)
             return True
         return False
 
     try:
         task.status = TaskStatus.RUNNING
+        from utils import bump_task_version
+        bump_task_version(task_id)
         update_task_progress(task_id, 0.0, "开始分析任务")
 
         # Step 1: Fetch all symbols from Bybit
@@ -134,6 +138,8 @@ def run_analysis_task(task_id: str, top_n: int, selected_factors: Optional[List[
         task.completed_at = datetime.now().isoformat()
         task.result = result
         set_last_completed_task(task)
+        from utils import bump_task_version
+        bump_task_version(task_id)
         logger.info(f"Analysis task {task_id} completed successfully.")
 
     except Exception as e:
@@ -142,3 +148,5 @@ def run_analysis_task(task_id: str, top_n: int, selected_factors: Optional[List[
         task.message = f"任务失败: {e}"
         task.completed_at = datetime.now().isoformat()
         task.error = str(e)
+        from utils import bump_task_version
+        bump_task_version(task_id)

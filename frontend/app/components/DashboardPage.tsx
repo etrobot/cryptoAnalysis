@@ -3,7 +3,7 @@ import { ResultsTable } from './ResultsTable'
 import { TaskProgressCard } from './TaskProgressCard'
 import { ThemeToggle } from './ThemeToggle'
 import { TaskResult } from '../types'
-import { api, createTaskStatusPoller, ApiError } from '../services/api'
+import { api, createTaskStatusSSE, ApiError } from '../services/api'
 import { useIsMobile } from '../hooks/use-mobile'
 
 export function DashboardPage() {
@@ -31,23 +31,23 @@ export function DashboardPage() {
     setIsTaskRunning(false)
   }, [])
 
-  const startPolling = useCallback((taskId: string) => {
-    const stopPolling = createTaskStatusPoller(
+  const startStreaming = useCallback((taskId: string) => {
+    const stopStream = createTaskStatusSSE(
       taskId,
       handleTaskUpdate,
       handleTaskComplete,
       handleTaskError
     )
-    return stopPolling
+    return stopStream
   }, [handleTaskUpdate, handleTaskComplete, handleTaskError])
 
   const handleRunAnalysis = useCallback((taskId: string) => {
     setError(null)
     setIsTaskRunning(true)
     api.getTaskStatus(taskId).then(setCurrentTask)
-    const stopPolling = startPolling(taskId)
-    ;(window as any).stopPolling = stopPolling
-  }, [startPolling])
+    const stopStream = startStreaming(taskId)
+    ;(window as any).stopTaskStream = stopStream
+  }, [startStreaming])
   
   const handleStopAnalysis = useCallback(() => {
     if (currentTask?.task_id) {
@@ -64,8 +64,8 @@ export function DashboardPage() {
         setCurrentTask(task)
         if (task.status === 'running' || task.status === 'pending') {
           setIsTaskRunning(true)
-          const stopPolling = startPolling(task.task_id)
-          ;(window as any).stopPolling = stopPolling
+          const stopStream = startStreaming(task.task_id)
+          ;(window as any).stopTaskStream = stopStream
         }
       }
     }).catch(err => {
@@ -78,11 +78,11 @@ export function DashboardPage() {
     })
 
     return () => {
-      if ((window as any).stopPolling) {
-        (window as any).stopPolling()
+      if ((window as any).stopTaskStream) {
+        (window as any).stopTaskStream()
       }
     }
-  }, [startPolling])
+  }, [startStreaming])
 
   return (
     <div className={`${isMobile ? 'p-2' : 'p-6'} space-y-4`}>

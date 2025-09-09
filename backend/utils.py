@@ -21,11 +21,21 @@ LAST_COMPLETED_TASK: Optional[Task] = None
 TASK_THREADS: Dict[str, _threading.Thread] = {}
 TASK_STOP_EVENTS: Dict[str, _threading.Event] = {}
 
+# Simple change-tracking for SSE streams
+TASK_VERSIONS: Dict[str, int] = {}
+
+def bump_task_version(task_id: str):
+    try:
+        TASK_VERSIONS[task_id] = TASK_VERSIONS.get(task_id, 0) + 1
+    except Exception:
+        pass
+
 def update_task_progress(task_id: str, progress: float, message: str):
     """Update task progress"""
     if task_id in TASKS:
         TASKS[task_id].progress = progress
         TASKS[task_id].message = message
+        bump_task_version(task_id)
         logger.info(f"Task {task_id}: {progress:.1%} - {message}")
 
 def handle_task_error(task_id: str, error: Exception):

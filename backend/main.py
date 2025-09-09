@@ -4,7 +4,7 @@ import warnings
 from typing import List
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from typing import Dict, List
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -19,6 +19,7 @@ from api import (
     read_root, run_analysis, get_task_status, get_latest_results, list_all_tasks,
     stop_analysis, login_user
 )
+from utils import get_task, TASK_VERSIONS
 from factors import list_factors
 
 # Configure logging
@@ -136,7 +137,7 @@ def run(request: RunRequest) -> RunResponse:
 
 
 @app.get("/task/{task_id}", response_model=TaskResult)
-def get_task(task_id: str) -> TaskResult:
+def get_task_route(task_id: str) -> TaskResult:
     return get_task_status(task_id)
 
 
@@ -148,6 +149,71 @@ def stop_task(task_id: str) -> TaskResult:
 @app.get("/results", response_model=TaskResult | Message)
 def get_results():
     return get_latest_results()
+
+# SSE stream for task updates
+@app.get("/task/{task_id}/events")
+async def task_events(task_id: str):
+    import asyncio
+
+    async def event_generator():
+        last_version = -1
+        # Send initial state immediately if available
+        task = get_task(task_id)
+        if task is not None:
+            from models import TaskResult
+            initial = TaskResult(
+                task_id=task.task_id,
+                status=task.status,
+                progress=task.progress,
+                message=task.message,
+                created_at=task.created_at,
+                completed_at=task.completed_at,
+                top_n=task.top_n,
+                selected_factors=task.selected_factors,
+                data=task.result["data"] if task.result else None,
+                count=task.result["count"] if task.result else None,
+                extended=task.result.get("extended") if task.result else None,
+                error=task.error
+            )
+            yield f"event: update\n"
+            yield f"data: {initial.model_dump_json()}\n\n"
+            last_version = TASK_VERSIONS.get(task_id, 0)
+        # Stream updates when version changes
+        while True:
+            await asyncio.sleep(0.5)
+            if task_id not in TASK_VERSIONS:
+                # If we have never seen this task version, initialize
+                TASK_VERSIONS[task_id] = TASK_VERSIONS.get(task_id, 0)
+            current_version = TASK_VERSIONS.get(task_id, 0)
+            if current_version != last_version:
+                task = get_task(task_id)
+                if task is None:
+                    break
+                from models import TaskResult
+                update = TaskResult(
+                    task_id=task.task_id,
+                    status=task.status,
+                    progress=task.progress,
+                    message=task.message,
+                    created_at=task.created_at,
+                    completed_at=task.completed_at,
+                    top_n=task.top_n,
+                    selected_factors=task.selected_factors,
+                    data=task.result["data"] if task.result else None,
+                    count=task.result["count"] if task.result else None,
+                    extended=task.result.get("extended") if task.result else None,
+                    error=task.error
+                )
+                yield f"event: update\n"
+                yield f"data: {update.model_dump_json()}\n\n"
+                last_version = current_version
+            # Stop after terminal states to allow client to close
+            task = get_task(task_id)
+            if task:
+                from models import TaskStatus as _TS
+                if task.status in (_TS.COMPLETED, _TS.FAILED, _TS.CANCELLED):
+                    break
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/tasks", response_model=List[TaskResult])

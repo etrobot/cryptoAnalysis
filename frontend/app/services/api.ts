@@ -86,3 +86,61 @@ export function createTaskStatusPoller(
 
   return () => clearInterval(pollInterval)
 }
+
+export function createTaskStatusSSE(
+  taskId: string,
+  onUpdate: (task: TaskResult) => void,
+  onComplete: (task: TaskResult) => void,
+  onError: (error: string) => void
+): () => void {
+  const url = `${API_BASE_URL}/task/${taskId}/events`
+  let closed = false
+  let es: EventSource | null = null
+  try {
+    es = new EventSource(url)
+  } catch (e) {
+    onError('无法连接到事件流，已回退到轮询')
+    return createTaskStatusPoller(taskId, onUpdate, onComplete, onError)
+  }
+
+  const handleUpdate = (ev: MessageEvent) => {
+    try {
+      const task: TaskResult = JSON.parse(ev.data)
+      onUpdate(task)
+      if (task.status === 'completed' || task.status === 'cancelled') {
+        es?.close()
+        onComplete(task)
+      } else if (task.status === 'failed') {
+        es?.close()
+        onError(task.error || '任务执行失败')
+      }
+    } catch (err) {
+      console.error('解析SSE数据失败', err)
+    }
+  }
+
+  const handleError = (err: any) => {
+    if (closed) return
+    console.error('SSE连接错误，回退到轮询', err)
+    es?.close()
+    // Fallback to polling on error
+    const stopPolling = createTaskStatusPoller(taskId, onUpdate, onComplete, onError)
+    ;(window as any).__sse_fallback_stop = stopPolling
+  }
+
+  es.addEventListener('update', handleUpdate)
+  es.onerror = handleError
+
+  return () => {
+    closed = true
+    try {
+      es?.removeEventListener('update', handleUpdate)
+      es?.close()
+    } catch {}
+    const stopFallback = (window as any).__sse_fallback_stop
+    if (typeof stopFallback === 'function') {
+      stopFallback()
+      ;(window as any).__sse_fallback_stop = undefined
+    }
+  }
+}
