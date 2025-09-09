@@ -16,8 +16,8 @@ export function TopScoresList({ title, data, getScore, color }: TopScoresListPro
     .slice(0, 10)
 
   return (
-    <div className="border rounded p-4">
-      <h2 className="font-semibold mb-3">{title}</h2>
+    <div className="border rounded p-4 bg-card dark:border-gray-700">
+      <h2 className="font-semibold mb-3 dark:text-gray-200">{title}</h2>
       <div className="space-y-2">
         {sortedData.map((record) => {
           const score = getScore(record)
@@ -27,7 +27,7 @@ export function TopScoresList({ title, data, getScore, color }: TopScoresListPro
                 <SymbolLink symbol={record.symbol} name={record.name} />
               </div>
               <ScoreBar value={score} color={color} />
-              <span className="w-14 text-right text-sm">{(score * 100).toFixed(0)}%</span>
+              <span className="w-14 text-right text-sm dark:text-gray-300">{(score * 100).toFixed(0)}%</span>
             </div>
           )
         })}

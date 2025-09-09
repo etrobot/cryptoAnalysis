@@ -70,14 +70,34 @@ def compute_factors(top_symbols: pd.DataFrame, history: Dict[str, pd.DataFrame],
     for symbol in result["symbol"].tolist():
         df = filtered_history.get(symbol)
         if df is not None and not df.empty:
-            df_sorted = df.sort_values("日期")
-            symbol_name = top_symbols[top_symbols["symbol"] == symbol]["name"].iloc[0] if "name" in top_symbols.columns and len(top_symbols[top_symbols["symbol"] == symbol]) > 0 else symbol
-            current_data.append({
-                "symbol": symbol,
-                "name": symbol_name,
-                "当前价格": float(df_sorted["收盘"].iloc[-1]),
-                "涨跌幅": float(df_sorted["涨跌幅"].iloc[-1]) if "涨跌幅" in df_sorted.columns else 0
-            })
+            # 确保DataFrame有正确的列名
+            if "date" in df.columns:
+                df = df.rename(columns={"date": "日期"})
+            if "close" in df.columns:
+                df = df.rename(columns={"close": "收盘"})
+            if "change_pct" in df.columns:
+                df = df.rename(columns={"change_pct": "涨跌幅"})
+            
+            # 检查必要的列是否存在
+            required_columns = ["日期", "收盘", "涨跌幅"]
+            if all(col in df.columns for col in required_columns):
+                df_sorted = df.sort_values("日期")
+                symbol_name = top_symbols[top_symbols["symbol"] == symbol]["name"].iloc[0] if "name" in top_symbols.columns and len(top_symbols[top_symbols["symbol"] == symbol]) > 0 else symbol
+                current_data.append({
+                    "symbol": symbol,
+                    "name": symbol_name,
+                    "当前价格": float(df_sorted["收盘"].iloc[-1]),
+                    "涨跌幅": float(df_sorted["涨跌幅"].iloc[-1]) if "涨跌幅" in df_sorted.columns else 0
+                })
+            else:
+                # 如果缺少必要的列，使用默认值
+                symbol_name = top_symbols[top_symbols["symbol"] == symbol]["name"].iloc[0] if "name" in top_symbols.columns and len(top_symbols[top_symbols["symbol"] == symbol]) > 0 else symbol
+                current_data.append({
+                    "symbol": symbol,
+                    "name": symbol_name,
+                    "当前价格": 0,
+                    "涨跌幅": 0
+                })
 
     current_df = pd.DataFrame(current_data)
     if not current_df.empty:

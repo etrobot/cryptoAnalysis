@@ -7,8 +7,8 @@ import numpy as np
 from models import Factor
 
 
-def days_from_longest_candle(candles, window_size):
-    """计算最长K线实体到最新价格的天数"""
+def find_longest_candle(candles, window_size):
+    """找到窗口内实体最长的K线及其长度"""
     # 取最后 window_size+1 根K线，这样窗口内的每根K线都有昨收数据
     # 实际分析的是最后 window_size 根K线
     extended_window = candles[-(window_size + 1):]
@@ -25,8 +25,8 @@ def days_from_longest_candle(candles, window_size):
             max_body_length = body_length
             max_body_idx = i
     
-    # 返回天数差（调整索引，因为我们从1开始计算）
-    return len(extended_window) - max_body_idx
+    # 返回最大实体长度和其索引
+    return max_body_length, max_body_idx
 
 
 def calculate_relative_body_length(window, idx):
@@ -39,7 +39,7 @@ def calculate_relative_body_length(window, idx):
 
 
 def compute_support(history: Dict[str, pd.DataFrame], top_spot: Optional[pd.DataFrame] = None, window_size: int = 60) -> pd.DataFrame:
-    """Calculate support factor using days from longest candle
+    """Calculate support factor using the new formula: (后半部分最低价 - 前半部分最低价) / abs(最大长度K线长度)
     
     Args:
         history: Historical price data
@@ -53,8 +53,25 @@ def compute_support(history: Dict[str, pd.DataFrame], top_spot: Optional[pd.Data
         if df is None or df.empty or len(df) < window_size + 1:
             continue
             
-        # Convert date column to datetime for proper sorting if needed
+        # 确保DataFrame有正确的列名
         df_copy = df.copy()
+        if "date" in df_copy.columns:
+            df_copy = df_copy.rename(columns={"date": "日期"})
+        if "open" in df_copy.columns:
+            df_copy = df_copy.rename(columns={"open": "开盘"})
+        if "close" in df_copy.columns:
+            df_copy = df_copy.rename(columns={"close": "收盘"})
+        if "high" in df_copy.columns:
+            df_copy = df_copy.rename(columns={"high": "最高"})
+        if "low" in df_copy.columns:
+            df_copy = df_copy.rename(columns={"low": "最低"})
+            
+        # 检查必要的列是否存在
+        required_columns = ["日期", "开盘", "收盘", "最高", "最低"]
+        if not all(col in df_copy.columns for col in required_columns):
+            continue
+            
+        # Convert date column to datetime for proper sorting if needed
         if not pd.api.types.is_datetime64_any_dtype(df_copy['日期']):
             df_copy['日期'] = pd.to_datetime(df_copy['日期'])
         
@@ -70,27 +87,38 @@ def compute_support(history: Dict[str, pd.DataFrame], top_spot: Optional[pd.Data
                 'low': row['最低']
             })
         
-        # Calculate days from longest candle with specified window
         # We need window_size + 1 candles to have proper previous close for all window candles
         actual_window = min(window_size, len(candles) - 1)
         
-        days_from_longest = days_from_longest_candle(candles, actual_window)
+        # 获取窗口内的K线数据
+        window_candles = candles[-actual_window:]
         
-        # Support factor: days from longest candle (more distant longest candle = better support)
-        # Normalize to 0-1 range, where farther from recent = higher score
-        support_factor_base = (days_from_longest / (actual_window - 1)) if actual_window > 1 else 0
+        # 如果窗口数据不足，跳过
+        if len(window_candles) < 2:
+            continue
+            
+        # 找到窗口内实体最长的K线
+        max_body_length, max_body_idx = find_longest_candle(candles, actual_window)
         
-        # Get the window for price ratio calculation
-        window = candles[-actual_window:]
+        # 如果没有找到有效的最长K线，跳过
+        if max_body_length == 0:
+            continue
         
-        # Use window first price / window last price as described
-        # For support factor, we want higher values when price has declined from window start
-
-        price_ratio = (window[-1]['close']-window[-1]['open'])/ window[0]['close']
+        # 将窗口分为前后两部分
+        half_window = len(window_candles) // 2
+        first_half = window_candles[:half_window]
+        second_half = window_candles[half_window:]
         
-        # Final support factor: combine time factor with price movement
-        # Higher values indicate stronger support (recent longest candle + price decline)
-        support_factor = support_factor_base * price_ratio
+        # 计算前半部分和后半部分的最低价
+        first_half_low = min(candle['low'] for candle in first_half) if first_half else float('inf')
+        second_half_low = min(candle['low'] for candle in second_half) if second_half else float('inf')
+        
+        # 计算支持因子：(后半部分最低价 - 前半部分最低价) / abs(最大长度K线长度)
+        # 值越大越好
+        support_factor = (second_half_low - first_half_low) / abs(max_body_length) if max_body_length != 0 else 0
+        
+        # 计算最长K线天数（从最新K线到最长K线的天数）
+        days_from_longest = len(candles) - max_body_idx - 1  # 调整索引计算
         
         rows.append({
             "symbol": symbol, 
@@ -118,7 +146,7 @@ def compute_support_with_default_window(history: Dict[str, pd.DataFrame], top_sp
 SUPPORT_FACTOR = Factor(
     id="support",
     name="支撑因子",
-    description=f"基于最长K线实体距离的支撑强度：计算{DEFAULT_WINDOW_SIZE}日窗口内最长K线实体（相对昨收幅度）到当前的天数，天数越多支撑越强，值越大越好",
+    description=f"基于价格变化的支持强度：计算{DEFAULT_WINDOW_SIZE}日窗口内(后半部分最低价 - 前半部分最低价) / abs(最大长度K线长度)，值越大越好",
     columns=[
         {"key": "支撑因子", "label": "支撑因子", "type": "number", "sortable": True},
         {"key": "支撑评分", "label": "支撑评分", "type": "score", "sortable": True},

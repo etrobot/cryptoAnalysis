@@ -13,8 +13,23 @@ def calculate_momentum_simple(df: pd.DataFrame) -> float:
     if len(df) < 2:
         return 0.0
     
-    # Convert date column to datetime for proper sorting if needed
+    # 确保DataFrame有正确的列名
     df_copy = df.copy()
+    if "date" in df_copy.columns:
+        df_copy = df_copy.rename(columns={"date": "日期"})
+    if "open" in df_copy.columns:
+        df_copy = df_copy.rename(columns={"open": "开盘"})
+    if "close" in df_copy.columns:
+        df_copy = df_copy.rename(columns={"close": "收盘"})
+    if "low" in df_copy.columns:
+        df_copy = df_copy.rename(columns={"low": "最低"})
+    
+    # 检查必要的列是否存在
+    required_columns = ["日期", "开盘", "收盘", "最低"]
+    if not all(col in df_copy.columns for col in required_columns):
+        return 0.0
+    
+    # Convert date column to datetime for proper sorting if needed
     if not pd.api.types.is_datetime64_any_dtype(df_copy['日期']):
         df_copy['日期'] = pd.to_datetime(df_copy['日期'])
     

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ResultsTable } from './ResultsTable'
 import { TaskProgressCard } from './TaskProgressCard'
+import { ThemeToggle } from './ThemeToggle'
 import { TaskResult } from '../types'
 import { api, createTaskStatusPoller, ApiError } from '../services/api'
 import { useIsMobile } from '../hooks/use-mobile'
@@ -87,14 +88,15 @@ export function DashboardPage() {
     <div className={`${isMobile ? 'p-2' : 'p-6'} space-y-4`}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Crypto Analysis Dashboard</h1>
+        <ThemeToggle />
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-red-800">错误: {error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 dark:bg-red-900/20 dark:border-red-800">
+          <div className="text-red-800 dark:text-red-200">错误: {error}</div>
           <button 
             onClick={() => setError(null)}
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm dark:bg-red-700 dark:hover:bg-red-600"
           >
             关闭
           </button>

@@ -57,7 +57,7 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
 
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) {
-      return <ChevronsUpDown className="w-4 h-4 text-gray-400 ml-1 inline" />
+      return <ChevronsUpDown className="w-4 h-4 text-muted-foreground ml-1 inline" />
     }
     return sortDirection === 'asc' ? (
       <ChevronUp className="w-4 h-4 ml-1 inline" />
@@ -68,7 +68,7 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
 
   const getColumnClassName = (field: SortField, baseClassName: string) => {
     const isActive = sortField === field
-    return `${baseClassName} ${isActive ? 'bg-gray-50' : ''}`
+    return `${baseClassName} ${isActive ? 'bg-secondary' : ''}`
   }
 
   const hasDataInColumn = (columnKey: string): boolean => {
@@ -132,24 +132,24 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
   }
 
   return (
-    <div className="overflow-auto border rounded max-h-[70vh]" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none' }}>
+    <div className="overflow-auto border rounded max-h-[70vh] dark:border-gray-700" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none' }}>
       <table className="min-w-full text-sm">
         <thead className="sticky top-0 z-30">
-          <tr className="bg-muted">
-            <th className="text-center p-2 bg-muted sticky left-0 z-30 border-r whitespace-nowrap">序号</th>
-            <th className={getColumnClassName('name', "text-left p-2 cursor-pointer hover:bg-gray-100 select-none bg-muted sticky left-[40px] z-30 border-r whitespace-nowrap")} onClick={() => handleSort('name')}>
+          <tr className="bg-muted dark:bg-gray-800">
+            <th className="text-center p-2 bg-muted sticky left-0 z-30 border-r whitespace-nowrap dark:bg-gray-800 dark:border-gray-700">序号</th>
+            <th className={getColumnClassName('name', "text-left p-2 cursor-pointer hover:bg-secondary/50 select-none bg-muted sticky left-[40px] z-30 border-r whitespace-nowrap dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700")} onClick={() => handleSort('name')}>
               交易对{renderSortIcon('name')}
             </th>
-            <th className={getColumnClassName('当前价格', "text-right p-2 cursor-pointer hover:bg-gray-100 select-none bg-muted whitespace-nowrap")} onClick={() => handleSort('当前价格')}>
+            <th className={getColumnClassName('当前价格', "text-right p-2 cursor-pointer hover:bg-secondary/50 select-none bg-muted whitespace-nowrap dark:bg-gray-800 dark:hover:bg-gray-700")} onClick={() => handleSort('当前价格')}>
               当前价格{renderSortIcon('当前价格')}
             </th>
-            <th className={getColumnClassName('涨跌幅', "text-right p-2 cursor-pointer hover:bg-gray-100 select-none bg-muted whitespace-nowrap")} onClick={() => handleSort('涨跌幅')}>
+            <th className={getColumnClassName('涨跌幅', "text-right p-2 cursor-pointer hover:bg-secondary/50 select-none bg-muted whitespace-nowrap dark:bg-gray-800 dark:hover:bg-gray-700")} onClick={() => handleSort('涨跌幅')}>
               涨跌幅{renderSortIcon('涨跌幅')}
             </th>
             {factorValueColumns.map((col) => (
               <th
                 key={col.key}
-                className={getColumnClassName(col.key, `text-right p-2 cursor-pointer hover:bg-gray-100 select-none bg-muted whitespace-nowrap`)}
+                className={getColumnClassName(col.key, `text-right p-2 cursor-pointer hover:bg-secondary/50 select-none bg-muted whitespace-nowrap dark:bg-gray-800 dark:hover:bg-gray-700`)}
                 onClick={() => col.sortable !== false ? handleSort(col.key) : undefined}
               >
                 {col.label}{col.sortable !== false ? renderSortIcon(col.key) : null}
@@ -158,13 +158,13 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
             {scoreColumns.map((col) => (
               <th
                 key={col.key}
-                className={getColumnClassName(col.key, `text-left p-2 cursor-pointer hover:bg-gray-100 select-none bg-muted whitespace-nowrap w-32`)}
+                className={getColumnClassName(col.key, `text-left p-2 cursor-pointer hover:bg-secondary/50 select-none bg-muted whitespace-nowrap w-32 dark:bg-gray-800 dark:hover:bg-gray-700`)}
                 onClick={() => col.sortable !== false ? handleSort(col.key) : undefined}
               >
                 {col.label}{col.sortable !== false ? renderSortIcon(col.key) : null}
               </th>
             ))}
-            <th className={getColumnClassName('综合评分', "text-left p-2 cursor-pointer hover:bg-gray-100 select-none bg-muted whitespace-nowrap w-32")} onClick={() => handleSort('综合评分')}>
+            <th className={getColumnClassName('综合评分', "text-left p-2 cursor-pointer hover:bg-secondary/50 select-none bg-muted whitespace-nowrap w-32 dark:bg-gray-800 dark:hover:bg-gray-700")} onClick={() => handleSort('综合评分')}>
               综合评分{renderSortIcon('综合评分')}
             </th>
           </tr>
@@ -176,22 +176,22 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
             const compositeScore = record.综合评分 || 0
 
             return (
-              <tr key={record.symbol} className="border-t">
-                <td className="p-2 text-center text-gray-500 font-mono sticky left-0 bg-white z-20 border-r">{index + 1}</td>
-                <td className={getColumnClassName('name', "p-2 sticky left-[40px] bg-white z-20 border-r")}>
+              <tr key={record.symbol} className="border-t dark:border-gray-700">
+                <td className="p-2 text-center text-muted-foreground font-mono sticky left-0 bg-background z-20 border-r dark:bg-gray-900 dark:border-gray-700 dark:text-gray-400">{index + 1}</td>
+                <td className={getColumnClassName('name', "p-2 sticky left-[40px] bg-background z-20 border-r dark:bg-gray-900 dark:border-gray-700")}>
                   <SymbolLink symbol={record.symbol} name={record.name} />
                 </td>
-                <td className={getColumnClassName('当前价格', "p-2 text-right")}>{currentPrice.toFixed(2)}</td>
-                <td className={getColumnClassName('涨跌幅', `p-2 text-right ${changePct >= 0 ? 'text-red-500' : 'text-green-500'}`)}>
+                <td className={getColumnClassName('当前价格', "p-2 text-right dark:text-gray-200")}>{currentPrice.toFixed(2)}</td>
+                <td className={getColumnClassName('涨跌幅', `p-2 text-right ${changePct >= 0 ? 'text-red-500' : 'text-green-500'} dark:${changePct >= 0 ? 'text-red-400' : 'text-green-400'}`)}>
                   {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
                 </td>
                 {factorValueColumns.map((col) => (
-                  <td key={col.key} className={getColumnClassName(col.key, "p-2 text-right")}>
+                  <td key={col.key} className={getColumnClassName(col.key, "p-2 text-right dark:text-gray-200")}>
                     {renderCell(record, col)}
                   </td>
                 ))}
                 {scoreColumns.map((col) => (
-                  <td key={col.key} className={getColumnClassName(col.key, "p-2 w-32")}>
+                  <td key={col.key} className={getColumnClassName(col.key, "p-2 w-32 dark:text-gray-200")}>
                     {renderCell(record, col)}
                   </td>
                 ))}
@@ -201,7 +201,7 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
           })}
           {data.length === 0 && (
             <tr>
-              <td className="p-4 text-center text-muted-foreground" colSpan={4 + filteredFactorColumns.length}>暂无数据，请点击"运行"</td>
+              <td className="p-4 text-center text-muted-foreground dark:text-gray-400" colSpan={4 + filteredFactorColumns.length}>暂无数据，请点击"运行"</td>
             </tr>
           )}
         </tbody>

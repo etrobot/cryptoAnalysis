@@ -79,17 +79,17 @@ export function FactorSelectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] dark:bg-gray-900 dark:border-gray-700">
         <DialogHeader>
-          <DialogTitle>选择计算因子</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="dark:text-gray-200">选择计算因子</DialogTitle>
+          <DialogDescription className="dark:text-gray-400">
             请选择要计算的因子类型（至少选择一个）
           </DialogDescription>
         </DialogHeader>
         
         <div className="py-4">
           {loading ? (
-            <div className="text-center py-4">加载因子列表...</div>
+            <div className="text-center py-4 dark:text-gray-400">加载因子列表...</div>
           ) : (
             <>
               <div className="flex gap-2 mb-4">
@@ -97,6 +97,7 @@ export function FactorSelectionDialog({
                   variant="outline" 
                   size="sm" 
                   onClick={handleSelectAll}
+                  className="dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                 >
                   全选
                 </Button>
@@ -104,6 +105,7 @@ export function FactorSelectionDialog({
                   variant="outline" 
                   size="sm" 
                   onClick={handleSelectNone}
+                  className="dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                 >
                   全不选
                 </Button>
@@ -122,12 +124,12 @@ export function FactorSelectionDialog({
                     <div className="grid gap-1.5 leading-none">
                       <label
                         htmlFor={factor.id}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer dark:text-gray-300"
                       >
                         {factor.name}
                       </label>
                       {factor.description && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground dark:text-gray-400">
                           {factor.description}
                         </p>
                       )}
@@ -137,7 +139,7 @@ export function FactorSelectionDialog({
               </div>
               
               {factors.length === 0 && !loading && (
-                <div className="text-center py-4 text-muted-foreground">
+                <div className="text-center py-4 text-muted-foreground dark:text-gray-500">
                   暂无可用因子
                 </div>
               )}
@@ -145,7 +147,7 @@ export function FactorSelectionDialog({
           )}
           
           {/* 数据采集选项 */}
-          <div className="border-t pt-4 mt-4">
+          <div className="border-t pt-4 mt-4 dark:border-gray-700">
             <div className="flex items-start space-x-3">
               <Checkbox
                 id="collect-latest-data"
@@ -155,11 +157,11 @@ export function FactorSelectionDialog({
               <div className="grid gap-1.5 leading-none">
                 <label
                   htmlFor="collect-latest-data"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer dark:text-gray-300"
                 >
                   采集最新数据
                 </label>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground dark:text-gray-400">
                   勾选后会获取最新的热点数据，不勾选则直接使用日K线历史数据进行因子计算
                 </p>
               </div>
@@ -168,7 +170,11 @@ export function FactorSelectionDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCancel}>
+          <Button 
+            variant="outline" 
+            onClick={handleCancel}
+            className="dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
             取消
           </Button>
           <Button 

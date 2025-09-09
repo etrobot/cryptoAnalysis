@@ -23,10 +23,10 @@ export function SymbolLink({ symbol, name, className = '' }: SymbolLinkProps) {
       href={getBybitUrl(symbol)}
       target="_blank"
       rel="noopener noreferrer"
-      className={`hover:text-blue-600 hover:underline ${className}`}
+      className={`text-primary hover:underline ${className} dark:text-blue-400`}
     >
-      <div className="font-medium">{name || symbol}</div>
-      <div className="text-xs text-muted-foreground font-mono">{symbol}</div>
+      <div className="font-medium dark:text-gray-200">{name || symbol}</div>
+      <div className="text-xs text-muted-foreground font-mono dark:text-gray-400">{symbol}</div>
     </a>
   )
 }

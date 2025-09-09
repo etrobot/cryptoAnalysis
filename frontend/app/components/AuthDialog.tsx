@@ -76,17 +76,17 @@ export function AuthDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[400px] dark:bg-gray-900 dark:border-gray-700">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="dark:text-gray-200">{title}</DialogTitle>
+          <DialogDescription className="dark:text-gray-400">
             {description}
           </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="username" className="text-sm font-medium">
+            <label htmlFor="username" className="text-sm font-medium dark:text-gray-300">
               用户名
             </label>
             <input
@@ -94,14 +94,14 @@ export function AuthDialog({
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
               placeholder="请输入用户名"
               disabled={loading}
             />
           </div>
           
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
+            <label htmlFor="email" className="text-sm font-medium dark:text-gray-300">
               邮箱
             </label>
             <input
@@ -109,14 +109,14 @@ export function AuthDialog({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
               placeholder="请输入邮箱"
               disabled={loading}
             />
           </div>
 
           {error && (
-            <div className="text-red-500 text-sm bg-red-50 p-2 rounded">
+            <div className="text-red-500 text-sm bg-red-50 p-2 rounded dark:bg-red-900/20 dark:border-red-800">
               {error}
             </div>
           )}
@@ -127,6 +127,7 @@ export function AuthDialog({
               variant="outline" 
               onClick={handleCancel}
               disabled={loading}
+              className="dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
             >
               取消
             </Button>

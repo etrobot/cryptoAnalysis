@@ -37,6 +37,7 @@ def get_kline(symbol: str, start_date: date, end_date: date) -> pd.DataFrame:
         end_ts = int(datetime.combine(end_date, datetime.max.time()).timestamp() * 1000)
         
         all_klines = []
+        seen_timestamps = set()
         while start_ts < end_ts:
             result = session.get_kline(
                 category="spot",
@@ -48,7 +49,15 @@ def get_kline(symbol: str, start_date: date, end_date: date) -> pd.DataFrame:
             
             if result['retCode'] == 0 and result['result']['list']:
                 klines = result['result']['list']
-                all_klines.extend(klines)
+                # 去重处理，确保每个时间戳只添加一次
+                unique_klines = []
+                for kline in klines:
+                    timestamp = kline[0]
+                    if timestamp not in seen_timestamps:
+                        seen_timestamps.add(timestamp)
+                        unique_klines.append(kline)
+                
+                all_klines.extend(unique_klines)
                 # bybit returns from oldest to newest, so the last one is the newest
                 last_ts = int(klines[-1][0])
                 # move to the next day
@@ -67,6 +76,9 @@ def get_kline(symbol: str, start_date: date, end_date: date) -> pd.DataFrame:
         df['close'] = pd.to_numeric(df['close'])
         df['volume'] = pd.to_numeric(df['volume'])
         df['turnover'] = pd.to_numeric(df['turnover'])
+        
+        # 按日期排序，确保数据顺序正确
+        df = df.sort_values('timestamp')
         
         # calculate change_pct
         df['change_pct'] = (df['close'].pct_change() * 100).fillna(0)

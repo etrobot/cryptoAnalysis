@@ -12,7 +12,7 @@ export function TaskProgressCard({ task, title = "分析进度" }: TaskProgressC
   }
 
   return (
-    <div className="border rounded p-4">
+    <div className="border rounded p-4 bg-card dark:border-gray-700">
       <h3 className="font-semibold mb-2">{title}</h3>
       <ProgressBar progress={task.progress} message={task.message} />
     </div>

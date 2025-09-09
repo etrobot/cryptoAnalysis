@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { DashboardPage } from './components/DashboardPage'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt'
+import { ThemeProvider } from './components/ThemeProvider'
 import './index.css'
 
 function App() {
@@ -31,15 +32,17 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex w-full">
-      <div className="flex-1 w-full">
-        <DashboardPage />
-      </div>
+    <ThemeProvider>
+      <div className="min-h-screen flex w-full">
+        <div className="flex-1 w-full">
+          <DashboardPage />
+        </div>
 
-      {/* PWA Components */}
-      <PWAInstallPrompt />
-      <PWAUpdatePrompt show={showUpdatePrompt} onUpdate={handlePWAUpdate} />
-    </div>
+        {/* PWA Components */}
+        <PWAInstallPrompt />
+        <PWAUpdatePrompt show={showUpdatePrompt} onUpdate={handlePWAUpdate} />
+      </div>
+    </ThemeProvider>
   )
 }
 

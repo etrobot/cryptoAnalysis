@@ -67,11 +67,9 @@ create_admin_user()
 
 # CORS configuration
 origins = [
-    "http://localhost:5173",
+    "http://localhost:14245",
     "https://btc.subx.fun",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://127.0.0.1:14245",
 ]
 
 # Allow all origins in development

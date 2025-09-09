@@ -97,7 +97,6 @@ export function ResultsTable({
           )}
         </Button>
       </div>
-
       <div style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none' }}>
         <ResultsMainView data={data} factorMeta={factorMeta} />
       </div>
