@@ -48,9 +48,42 @@ for exposing problems, avoid try catch as much as possible
   - `app/services/`: API client services
   - `app/hooks/`: Custom React hooks
 
-### Data Flow
+### Global Task Management System
+
+#### Task Concurrency Control
+- **Single Task Execution**: Only one background task can run simultaneously
+- **Semaphore Control**: `threading.Semaphore(1)` in `backend/data_management/services.py:28`
+- **Task Queue**: New tasks wait in PENDING status if another task is running
+- **Timeout Protection**: 5-second timeout when acquiring semaphore to prevent blocking
+
+#### Real-time Communication (SSE + Polling Fallback)
+- **Primary**: Server-Sent Events (SSE) for real-time task updates
+  - Endpoint: `/task/{task_id}/events`
+  - Event type: `update` with JSON task status
+  - Auto-closes on terminal states (completed/failed/cancelled)
+- **Fallback**: Automatic polling if SSE fails
+  - 1-second interval polling
+  - Same termination conditions as SSE
+
+#### Task State Management
+- **Backend Storage**: Global `TASKS` dict in `utils.py:17`
+- **Version Control**: `TASK_VERSIONS` dict for SSE change detection
+- **Thread Management**: `TASK_THREADS` and `TASK_STOP_EVENTS` for lifecycle control
+
+#### Polling Termination Logic
+Polling stops when:
+1. **Task completion**: `status === 'completed'`
+2. **Task cancellation**: `status === 'cancelled'`
+3. **Task failure**: `status === 'failed'`
+4. **Network errors**: API request failures
+5. **Manual stop**: Component unmount or explicit cleanup
+
+#### Data Flow
 1. Frontend submits analysis request via `/run` endpoint
 2. Backend creates background task and returns task ID
 3. Frontend subscribes to task updates via `/task/{id}/events` SSE stream
-4. Backend processes crypto data using factors from `factors/` directory
-5. Results stored in SQLite database and streamed to frontend
+4. If SSE fails, automatically falls back to polling mode
+5. Backend processes crypto data using factors from `factors/` directory
+6. Task status updates streamed in real-time via SSE or polling
+7. Results stored in SQLite database and delivered to frontend
+8. Communication automatically terminates on task completion
