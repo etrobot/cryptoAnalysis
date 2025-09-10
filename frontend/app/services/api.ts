@@ -1,4 +1,4 @@
-import { TaskResult, RunResponse, FactorListResponse } from '../types'
+import { TaskResult, RunResponse, FactorListResponse, NewsTaskResult } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
   (import.meta.env.PROD ? '' : 'http://localhost:14250')
@@ -58,6 +58,29 @@ export const api = {
 
   async getFactors(): Promise<FactorListResponse> {
     return apiCall<FactorListResponse>('/factors')
+  },
+
+  async startNewsEvaluation(topN: number = 10, newsPerSymbol: number = 3, openaiModel: string = "gpt-3.5-turbo"): Promise<RunResponse> {
+    return apiCall<RunResponse>('/run-news-evaluation', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        top_n: topN,
+        news_per_symbol: newsPerSymbol,
+        openai_model: openaiModel
+      }),
+    })
+  },
+
+  async getNewsTaskStatus(taskId: string): Promise<NewsTaskResult> {
+    return apiCall<NewsTaskResult>(`/task/${taskId}`)
+  },
+
+  async stopNewsTask(taskId: string): Promise<NewsTaskResult> {
+    return apiCall<NewsTaskResult>(`/task/${taskId}/stop`, { method: 'POST' })
+  },
+
+  async getLatestNewsResults(): Promise<NewsTaskResult> {
+    return apiCall<NewsTaskResult>('/results')
   },
 }
 

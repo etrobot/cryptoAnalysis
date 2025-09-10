@@ -39,6 +39,11 @@ class RunRequest(BaseModel):
     collect_latest_data: bool = True
     period: Optional[str] = "day"  # 'hour', '4hour', 'day'
 
+class NewsEvaluationRequest(BaseModel):
+    top_n: int = 10
+    news_per_symbol: int = 3
+    openai_model: str = "gpt-3.5-turbo"
+
 class RunResponse(BaseModel):
     task_id: str
     status: TaskStatus

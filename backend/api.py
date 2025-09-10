@@ -1,12 +1,12 @@
 from __future__ import annotations
 from typing import List
 from fastapi import HTTPException
-from models import RunRequest, RunResponse, TaskResult, TaskStatus, Message, AuthRequest, AuthResponse, User, get_session
+from models import RunRequest, RunResponse, TaskResult, TaskStatus, Message, AuthRequest, AuthResponse, User, NewsEvaluationRequest, get_session
 from sqlmodel import select
 from utils import (
     get_task, get_all_tasks, get_last_completed_task
 )
-from data_management.services import create_analysis_task
+from data_management.services import create_analysis_task, create_news_evaluation_task
 from utils import TASK_STOP_EVENTS, get_task
 
 from factors import list_factors
@@ -162,3 +162,17 @@ def login_user(request: AuthRequest) -> AuthResponse:
             success=False,
             message=f"认证失败: {str(e)}"
         )
+
+def run_news_evaluation(request: NewsEvaluationRequest) -> RunResponse:
+    """Start news evaluation task for top cryptocurrencies"""
+    # 限制参数范围
+    top_n = min(max(request.top_n, 1), 20)  # 1-20个币种
+    news_per_symbol = min(max(request.news_per_symbol, 1), 10)  # 每个币种1-10条新闻
+    
+    task_id = create_news_evaluation_task(top_n, news_per_symbol, request.openai_model)
+    
+    return RunResponse(
+        task_id=task_id,
+        status=TaskStatus.PENDING,
+        message="新闻评估任务已启动"
+    )

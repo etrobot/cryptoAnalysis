@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stock-analysis-v2'; // Bump version to ensure update
+const CACHE_NAME = 'crypto-analysis-v5'; // Force cache clear for port fix
 const APP_SHELL_URLS = [
   '/',
   '/index.html',
@@ -46,9 +46,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Don't cache API requests
-  if (event.request.url.includes('/api/')) {
-    event.respondWith(fetch(event.request));
+  // Don't cache API requests or external resources
+  if (event.request.url.includes('/api/') || 
+      event.request.url.includes('localhost:14250') ||
+      event.request.url.includes('localhost:14245')) {
+    event.respondWith(fetch(event.request).catch(() => {
+      // Return a basic response for failed API calls
+      return new Response('{"error": "Network unavailable"}', {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }));
     return;
   }
 
@@ -70,6 +78,19 @@ self.addEventListener('fetch', (event) => {
             }
           }
           return networkResponse;
+        }).catch((error) => {
+          console.log('Fetch failed for:', event.request.url, error);
+          // Return a basic offline response for failed requests
+          if (event.request.destination === 'image') {
+            // Return a simple SVG placeholder for images
+            return new Response('<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#f0f0f0"/><text x="50" y="50" text-anchor="middle" dy=".3em" fill="#666">Offline</text></svg>', {
+              headers: { 'Content-Type': 'image/svg+xml' }
+            });
+          }
+          // For other resources, return a basic HTML page
+          return new Response('<!DOCTYPE html><html><head><title>Offline</title></head><body><h1>App is offline</h1></body></html>', {
+            headers: { 'Content-Type': 'text/html' }
+          });
         });
       });
     })

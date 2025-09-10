@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { DashboardPage } from './components/DashboardPage'
+import { NewsEvaluationPage } from './components/NewsEvaluationPage'
+import { BottomNavigation } from './components/BottomNavigation'
+import { SideNavigation } from './components/SideNavigation'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt'
 import { ThemeProvider } from './components/ThemeProvider'
@@ -33,15 +37,23 @@ function App() {
 
   return (
     <ThemeProvider>
-      <div className="min-h-screen flex w-full">
-        <div className="flex-1 w-full">
-          <DashboardPage />
-        </div>
+      <BrowserRouter>
+        <div className="min-h-screen flex w-full">
+          <SideNavigation />
+          <div className="flex-1 flex flex-col w-full">
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/analysis" element={<DashboardPage />} />
+              <Route path="/news-evaluation" element={<NewsEvaluationPage />} />
+            </Routes>
+          </div>
+          <BottomNavigation />
 
-        {/* PWA Components */}
-        <PWAInstallPrompt />
-        <PWAUpdatePrompt show={showUpdatePrompt} onUpdate={handlePWAUpdate} />
-      </div>
+          {/* PWA Components */}
+          <PWAInstallPrompt />
+          <PWAUpdatePrompt show={showUpdatePrompt} onUpdate={handlePWAUpdate} />
+        </div>
+      </BrowserRouter>
     </ThemeProvider>
   )
 }

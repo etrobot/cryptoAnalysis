@@ -9,4 +9,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./app"),
     },
   },
+  server: {
+    port: 14245,
+    hmr: {
+      port: 14245,
+    },
+  },
 })

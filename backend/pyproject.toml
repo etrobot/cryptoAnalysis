@@ -14,6 +14,7 @@ dependencies = [
     "requests",
     "pybit",
     "python-dotenv",
+    "openai",
 ]
 [tool.uv]
 dev-dependencies = [

@@ -59,3 +59,52 @@ export type TaskMeta = {
   created_at?: string
   count?: number
 }
+
+export type NewsItem = {
+  title: string
+  content: string
+  url: string
+  published_at: string
+  source: string
+  symbol: string
+}
+
+export type NewsEvaluation = {
+  overall_score: number
+  detailed_scores: Record<string, number>
+  top_scoring_criterion: string
+  top_score: number
+}
+
+export type NewsEvaluationResult = {
+  symbol: string
+  base_coin: string
+  news_count: number
+  evaluation: NewsEvaluation
+  news_summary: string
+  news_items?: NewsItem[]
+  error?: string
+}
+
+export type NewsEvaluationResponse = {
+  data: NewsEvaluationResult[]
+  count: number
+  summary: {
+    total_symbols: number
+    total_news: number
+    evaluation_model: string
+    top_performer: NewsEvaluationResult | null
+    average_score: number
+  }
+}
+
+export type NewsTaskResult = {
+  task_id: string
+  status: TaskStatus
+  progress: number
+  message: string
+  created_at: string
+  completed_at?: string
+  result?: NewsEvaluationResponse
+  error?: string
+}

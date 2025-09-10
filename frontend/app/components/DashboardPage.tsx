@@ -87,7 +87,7 @@ export function DashboardPage() {
   }, [startStreaming])
 
   return (
-    <div className={`${isMobile ? 'p-2' : 'p-6'} space-y-4`}>
+    <div className={`${isMobile ? 'p-2 pb-20' : 'p-6 pb-20'} space-y-4`}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Crypto Analysis Dashboard</h1>
         <ThemeToggle />

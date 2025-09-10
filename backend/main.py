@@ -13,11 +13,11 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from models import RunRequest, RunResponse, TaskResult, Message, AuthRequest, AuthResponse, create_db_and_tables, User, get_session
+from models import RunRequest, RunResponse, TaskResult, Message, AuthRequest, AuthResponse, NewsEvaluationRequest, create_db_and_tables, User, get_session
 from sqlmodel import select
 from api import (
     read_root, run_analysis, get_task_status, get_latest_results, list_all_tasks,
-    stop_analysis, login_user
+    stop_analysis, login_user, run_news_evaluation
 )
 from utils import get_task, TASK_VERSIONS
 from factors import list_factors
@@ -134,6 +134,11 @@ async def root_index():
 @app.post("/run", response_model=RunResponse)
 def run(request: RunRequest) -> RunResponse:
     return run_analysis(request)
+
+
+@app.post("/run-news-evaluation", response_model=RunResponse)
+def run_news_eval(request: NewsEvaluationRequest) -> RunResponse:
+    return run_news_evaluation(request)
 
 
 @app.get("/task/{task_id}", response_model=TaskResult)
