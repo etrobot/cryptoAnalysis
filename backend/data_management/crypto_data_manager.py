@@ -98,38 +98,53 @@ def save_daily_data(history_data: Dict[str, pd.DataFrame]):
 def save_hourly_data(history_data: Dict[str, pd.DataFrame]):
    """保存1小时K线数据到数据库"""
    total_saved = 0
+   
+   logger.info(f"Starting to save hourly data for {len(history_data)} symbols")
+   
+   try:
+       with Session(engine) as session:
+           for symbol, df in history_data.items():
+               if df is None or df.empty:
+                   logger.warning(f"Empty dataframe for symbol {symbol}")
+                   continue
 
-   with Session(engine) as session:
-       for symbol, df in history_data.items():
-           if df is None or df.empty:
-               continue
+               logger.info(f"Processing {len(df)} records for symbol {symbol}")
+               
+               for _, row in df.iterrows():
+                   try:
+                       # df['date'] 是 pandas 的 datetime64[ns]
+                       record_dt = pd.to_datetime(row["date"]).to_pydatetime().replace(minute=0, second=0, microsecond=0)
+                       existing = session.exec(
+                           select(HourlyMarketData).where(
+                               HourlyMarketData.symbol == symbol,
+                               HourlyMarketData.datetime == record_dt
+                           )
+                       ).first()
 
-           for _, row in df.iterrows():
-               # df['date'] 是 pandas 的 datetime64[ns]
-               record_dt = pd.to_datetime(row["date"]).to_pydatetime().replace(minute=0, second=0, microsecond=0)
-               existing = session.exec(
-                   select(HourlyMarketData).where(
-                       HourlyMarketData.symbol == symbol,
-                       HourlyMarketData.datetime == record_dt
-                   )
-               ).first()
+                       if existing is None:
+                           hourly = HourlyMarketData(
+                               symbol=symbol,
+                               datetime=record_dt,
+                               open_price=float(row.get("open", 0)),
+                               high_price=float(row.get("high", 0)),
+                               low_price=float(row.get("low", 0)),
+                               close_price=float(row.get("close", 0)),
+                               volume=float(row.get("volume", 0)),
+                               amount=float(row.get("turnover", 0)),
+                               change_pct=float(row.get("change_pct", 0)),
+                           )
+                           session.add(hourly)
+                           total_saved += 1
+                   except Exception as e:
+                       logger.error(f"Error processing row for {symbol}: {e}")
+                       continue
 
-               if existing is None:
-                   hourly = HourlyMarketData(
-                       symbol=symbol,
-                       datetime=record_dt,
-                       open_price=float(row.get("open", 0)),
-                       high_price=float(row.get("high", 0)),
-                       low_price=float(row.get("low", 0)),
-                       close_price=float(row.get("close", 0)),
-                       volume=float(row.get("volume", 0)),
-                       amount=float(row.get("turnover", 0)),
-                       change_pct=float(row.get("change_pct", 0)),
-                   )
-                   session.add(hourly)
-                   total_saved += 1
-
-       session.commit()
+           session.commit()
+           logger.info(f"Successfully committed {total_saved} hourly records to database")
+           
+   except Exception as e:
+       logger.error(f"Error in save_hourly_data: {e}")
+       raise
 
    logger.info(f"Saved {total_saved} hourly market data records")
    return total_saved
@@ -138,29 +153,43 @@ def save_crypto_symbol_info(symbols_data: pd.DataFrame):
     """保存加密货币交易对基本信息"""
     total_saved = 0
     
-    with Session(engine) as session:
-        for _, row in symbols_data.iterrows():
-            symbol = row["symbol"]
-            name = row.get("name", symbol)
+    logger.info(f"Starting to save symbol info for {len(symbols_data)} symbols")
+    
+    try:
+        with Session(engine) as session:
+            for _, row in symbols_data.iterrows():
+                symbol = row["symbol"]
+                name = row.get("name", symbol)
+                
+                logger.debug(f"Processing symbol: {symbol}, name: {name}")
+                
+                # 检查是否已存在
+                existing = session.exec(
+                    select(CryptoSymbol).where(CryptoSymbol.symbol == symbol)
+                ).first()
+                
+                if existing is None:
+                    symbol_info = CryptoSymbol(
+                        symbol=symbol,
+                        name=name,
+                    )
+                    session.add(symbol_info)
+                    total_saved += 1
+                    logger.debug(f"Added new symbol: {symbol}")
+                elif existing.name != name:
+                    # 更新名称
+                    existing.name = name
+                    existing.updated_at = datetime.now()
+                    logger.debug(f"Updated symbol: {symbol}")
+                else:
+                    logger.debug(f"Symbol {symbol} already exists with same name")
             
-            # 检查是否已存在
-            existing = session.exec(
-                select(CryptoSymbol).where(CryptoSymbol.symbol == symbol)
-            ).first()
+            session.commit()
+            logger.info(f"Successfully committed {total_saved} symbol records to database")
             
-            if existing is None:
-                symbol_info = CryptoSymbol(
-                    symbol=symbol,
-                    name=name,
-                )
-                session.add(symbol_info)
-                total_saved += 1
-            elif existing.name != name:
-                # 更新名称
-                existing.name = name
-                existing.updated_at = datetime.now()
-        
-        session.commit()
+    except Exception as e:
+        logger.error(f"Error in save_crypto_symbol_info: {e}")
+        raise
     
     logger.info(f"Saved/updated {total_saved} crypto symbol info records")
     return total_saved

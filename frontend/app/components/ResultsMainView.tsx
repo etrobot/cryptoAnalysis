@@ -182,7 +182,7 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
                   <SymbolLink symbol={record.symbol} name={record.name} />
                 </td>
                 <td className={getColumnClassName('当前价格', "p-2 text-right dark:text-gray-200")}>{currentPrice.toFixed(2)}</td>
-                <td className={getColumnClassName('涨跌幅', `p-2 text-right ${changePct >= 0 ? 'text-red-500' : 'text-green-500'} dark:${changePct >= 0 ? 'text-red-400' : 'text-green-400'}`)}>
+                <td className={getColumnClassName('涨跌幅', `p-2 text-right ${changePct >= 0 ? 'text-pink-500' : 'text-teal-500'} dark:${changePct >= 0 ? 'text-pink-400' : 'text-teal-400'}`)}>
                   {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
                 </td>
                 {factorValueColumns.map((col) => (
@@ -195,7 +195,7 @@ export function ResultsMainView({ data, factorMeta = [] }: ResultsMainViewProps)
                     {renderCell(record, col)}
                   </td>
                 ))}
-                <td className={getColumnClassName('综合评分', "p-2 w-32")}><ScoreBar value={compositeScore} color="bg-purple-500" /></td>
+                <td className={getColumnClassName('综合评分', "p-2 w-32")}><ScoreBar value={compositeScore} color="bg-teal-500" /></td>
               </tr>
             )
           })}

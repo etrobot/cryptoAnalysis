@@ -27,7 +27,7 @@ from .crypto_data_manager import (
 logger = logging.getLogger(__name__)
 
 def run_analysis_task(task_id: str, top_n: int, selected_factors: Optional[List[str]] = None, 
-                     collect_latest_data: bool = True, stop_event: Optional[threading.Event] = None):
+                     collect_latest_data: bool = True, period: Optional[str] = "day", stop_event: Optional[threading.Event] = None):
     """The main crypto analysis task runner"""
     
     task = get_task(task_id)
@@ -55,9 +55,38 @@ def run_analysis_task(task_id: str, top_n: int, selected_factors: Optional[List[
         # Step 1: 获取成交额Top交易对，避免遍历所有交易对
         update_task_progress(task_id, 0.05, "获取成交额Top交易对")
         if check_cancel(): return
-        top_symbols_df = fetch_top_symbols_by_turnover(top_n)
-        if top_symbols_df.empty:
-            raise Exception("Failed to fetch top symbols by turnover from Bybit.")
+        
+        if collect_latest_data:
+            # 当需要采集最新数据时，从Bybit API获取Top交易对
+            top_symbols_df = fetch_top_symbols_by_turnover(top_n)
+            if top_symbols_df.empty:
+                raise Exception("Failed to fetch top symbols by turnover from Bybit.")
+        else:
+            # 当不需要采集最新数据时，直接使用数据库中有数据的交易对
+            from sqlmodel import Session, select, func
+            from models import DailyMarketData, engine
+            
+            with Session(engine) as session:
+                # 获取数据库中有数据的交易对，按数据量排序
+                stmt = select(DailyMarketData.symbol, func.count(DailyMarketData.symbol).label('count')).group_by(DailyMarketData.symbol).order_by(func.count(DailyMarketData.symbol).desc()).limit(top_n)
+                results = session.exec(stmt).all()
+                
+                if not results:
+                    raise Exception("No historical data found in database.")
+                
+                # 构造top_symbols_df
+                symbols_data = []
+                for symbol, count in results:
+                    base_coin = symbol.replace('USDT', '') if symbol.endswith('USDT') else symbol
+                    symbols_data.append({
+                        'symbol': symbol,
+                        'baseCoin': base_coin,
+                        'quoteCoin': 'USDT',
+                        'name': f"{base_coin}/USDT"
+                    })
+                
+                top_symbols_df = pd.DataFrame(symbols_data)
+                logger.info(f"Using {len(top_symbols_df)} symbols from database with historical data")
 
         # Step 2: 保存交易对信息（仅Top列表）
         update_task_progress(task_id, 0.1, "保存交易对信息")
@@ -70,23 +99,72 @@ def run_analysis_task(task_id: str, top_n: int, selected_factors: Optional[List[
         symbols_to_process = top_symbols_df["symbol"].tolist()
         logger.info(f"Selected top {len(symbols_to_process)} symbols to process by 24h turnover.")
 
-        # Step 4-6: 直接获取90天的1小时K线，避免全量日线耗时
+        # Convert period to Bybit API interval format
+        interval_map = {
+            "hour": "60",
+            "4hour": "240", 
+            "day": "D"
+        }
+        interval = interval_map.get(period, "D")
+        
+        # Adjust time range based on period
+        if period == "hour":
+            days_back = 7  # 1 week for hourly data
+            period_name = "小时"
+        elif period == "4hour":
+            days_back = 30  # 1 month for 4-hour data
+            period_name = "4小时"
+        else:  # day
+            days_back = 90  # 3 months for daily data
+            period_name = "日"
+        
+        # Step 4-6: 获取K线数据
         if collect_latest_data:
             if check_cancel(): return
             today = date.today()
-            start_1h = today - timedelta(days=90)
-            update_task_progress(task_id, 0.25, f"获取1小时K线（近90天，共 {len(symbols_to_process)} 个交易对）")
-            history_1h = fetch_history(symbols_to_process, start_1h, today, task_id=task_id, interval="60")
-            # 入库小时数据
-            update_task_progress(task_id, 0.4, "保存1小时K线到数据库")
+            start_date = today - timedelta(days=days_back)
+            update_task_progress(task_id, 0.25, f"获取{period_name}K线（近{days_back}天，共 {len(symbols_to_process)} 个交易对）")
+            
             try:
-                save_hourly_data(history_1h)
+                history_1h = fetch_history(symbols_to_process, start_date, today, task_id=task_id, interval=interval)
+                
+                # 检查是否获取到数据
+                if not history_1h:
+                    logger.warning("未获取到任何历史数据，尝试从数据库加载")
+                    # Load appropriate data based on period
+                    if period == "hour":
+                        history_for_factors = load_hourly_data_for_analysis(symbols_to_process, limit=24*days_back)
+                    else:
+                        history_for_factors = load_daily_data_for_analysis(symbols_to_process, limit=days_back)
+                else:
+                    # 入库数据
+                    update_task_progress(task_id, 0.4, f"保存{period_name}K线到数据库")
+                    try:
+                        if period == "hour":
+                            saved_count = save_hourly_data(history_1h)
+                            logger.info(f"成功保存 {saved_count} 条小时线数据")
+                        else:
+                            saved_count = save_daily_data(history_1h)
+                            logger.info(f"成功保存 {saved_count} 条{period_name}线数据")
+                    except Exception as e:
+                        logger.error(f"保存{period_name}数据失败: {e}")
+                        # 保存失败不应该导致整个任务失败，继续使用获取到的数据
+                    history_for_factors = history_1h
+                    
             except Exception as e:
-                logger.warning(f"保存小时数据失败: {e}")
-            history_for_factors = history_1h
+                logger.error(f"获取历史数据失败: {e}")
+                # 如果获取失败，尝试从数据库加载现有数据
+                update_task_progress(task_id, 0.35, "获取数据失败，从数据库加载现有数据")
+                if period == "hour":
+                    history_for_factors = load_hourly_data_for_analysis(symbols_to_process, limit=24*days_back)
+                else:
+                    history_for_factors = load_daily_data_for_analysis(symbols_to_process, limit=days_back)
         else:
-            # 可选：从数据库加载最近的小时数据用于计算
-            history_for_factors = load_hourly_data_for_analysis(symbols_to_process, limit=24*90)
+            # 从数据库加载数据用于计算
+            if period == "hour":
+                history_for_factors = load_hourly_data_for_analysis(symbols_to_process, limit=24*days_back)
+            else:
+                history_for_factors = load_daily_data_for_analysis(symbols_to_process, limit=days_back)
 
         # Step 7: 准备数据进行因子计算
         update_task_progress(task_id, 0.7, "加载数据进行因子计算")

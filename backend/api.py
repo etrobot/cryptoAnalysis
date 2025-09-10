@@ -16,7 +16,9 @@ def read_root():
 
 def run_analysis(request: RunRequest) -> RunResponse:
     """Start comprehensive crypto analysis as background task"""
-    task_id = create_analysis_task(request.top_n, request.selected_factors, request.collect_latest_data)
+    # 强制限制为最多50个交易对
+    top_n = min(request.top_n, 50)
+    task_id = create_analysis_task(top_n, request.selected_factors, request.collect_latest_data, request.period)
     
     return RunResponse(
         task_id=task_id,

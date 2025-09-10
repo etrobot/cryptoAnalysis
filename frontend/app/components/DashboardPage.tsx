@@ -8,6 +8,7 @@ import { useIsMobile } from '../hooks/use-mobile'
 
 export function DashboardPage() {
   const [currentTask, setCurrentTask] = useState<TaskResult | null>(null)
+  const [previousResults, setPreviousResults] = useState<TaskResult | null>(null)
   const [isTaskRunning, setIsTaskRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isMobile = useIsMobile()
@@ -23,6 +24,7 @@ export function DashboardPage() {
 
   const handleTaskComplete = useCallback((task: TaskResult) => {
     setCurrentTask(task)
+    setPreviousResults(task)
     setIsTaskRunning(false)
   }, [])
 
@@ -93,7 +95,7 @@ export function DashboardPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 dark:bg-red-900/20 dark:border-red-800">
-          <div className="text-red-800 dark:text-red-200">错误: {error}</div>
+          <div className="text-pink-800 dark:text-pink-200">错误: {error}</div>
           <button 
             onClick={() => setError(null)}
             className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm dark:bg-red-700 dark:hover:bg-red-600"
@@ -108,7 +110,7 @@ export function DashboardPage() {
       )}
 
       <ResultsTable
-        data={currentTask?.data || []}
+        data={isTaskRunning ? (previousResults?.data || []) : (currentTask?.data || [])}
         factorMeta={[]} // This should be fetched from the /factors endpoint
         onRunAnalysis={handleRunAnalysis}
         onStopAnalysis={handleStopAnalysis}

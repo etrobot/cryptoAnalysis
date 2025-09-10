@@ -6,10 +6,13 @@ from typing import List
 import pandas as pd
 from sqlmodel import Session, select
 from models import (
-    engine, DailyMarketData, WeeklyMarketData, MonthlyMarketData
+    engine, DailyMarketData
 )
 
 logger = logging.getLogger(__name__)
+
+# Remove WeeklyMarketData and MonthlyMarketData imports since they don't exist
+# These functions may not be used in the current implementation
 
 
 def calculate_and_save_weekly_data(stock_codes: List[str], task_id: str = None):

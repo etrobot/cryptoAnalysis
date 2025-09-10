@@ -51,25 +51,52 @@ def fetch_top_symbols_by_turnover(top_n: int = 50) -> pd.DataFrame:
 
 def fetch_history(symbols: List[str], start_date: date, end_date: date, task_id: Optional[str] = None, interval: str = "D") -> Dict[str, pd.DataFrame]:
     """Fetch historical k-line data for multiple symbols"""
+    import time
+    
     history: Dict[str, pd.DataFrame] = {}
     
-    logger.info(f"Fetching historical data for {len(symbols)} symbols from {start_date} to {end_date}")
+    logger.info(f"Fetching historical data for {len(symbols)} symbols from {start_date} to {end_date} (interval: {interval})")
+    
+    failed_symbols = []
     
     for i, symbol in enumerate(symbols):
         if task_id:
             progress = 0.2 + (0.5 * i / len(symbols))  # 20%-70% of total progress
             update_task_progress(task_id, progress, f"获取历史数据 {i+1}/{len(symbols)}: {symbol}")
         
-        df = get_kline(symbol, start_date, end_date, interval=interval)
+        logger.info(f"Fetching data for symbol {i+1}/{len(symbols)}: {symbol}")
         
-        if not df.empty:
-            df["symbol"] = symbol
-            history[symbol] = df
+        try:
+            # 添加超时控制，避免单个交易对获取时间过长
+            df = get_kline(symbol, start_date, end_date, interval=interval)
             
-            if (i + 1) % 20 == 0:
-                logger.info(f"Processed {i + 1}/{len(symbols)} symbols")
+            if not df.empty:
+                df["symbol"] = symbol
+                history[symbol] = df
+                logger.info(f"Successfully fetched {len(df)} records for {symbol}")
+            else:
+                logger.warning(f"No data returned for {symbol}")
+                failed_symbols.append(symbol)
+                
+        except Exception as e:
+            logger.error(f"Failed to fetch data for {symbol}: {e}")
+            failed_symbols.append(symbol)
+            # 如果连续失败太多，可能是网络问题，增加延迟
+            if len(failed_symbols) >= 2:
+                logger.warning("连续获取失败，增加延迟时间")
+                time.sleep(2)  # 增加延迟
+        
+        # Add delay between symbol requests to prevent API overload
+        if i < len(symbols) - 1:  # Don't delay after the last symbol
+            time.sleep(0.3)  # 300ms delay between symbols
+            
+        if (i + 1) % 10 == 0:  # 更频繁的进度报告
+            logger.info(f"Processed {i + 1}/{len(symbols)} symbols, successful: {len(history)}, failed: {len(failed_symbols)}")
     
-    logger.info(f"Successfully fetched historical data for {len(history)} symbols")
+    if failed_symbols:
+        logger.warning(f"Failed to fetch data for {len(failed_symbols)} symbols: {failed_symbols[:5]}{'...' if len(failed_symbols) > 5 else ''}")
+    
+    logger.info(f"Successfully fetched historical data for {len(history)} symbols out of {len(symbols)} requested")
     return history
 
 def compute_factors(top_symbols: pd.DataFrame, history: Dict[str, pd.DataFrame], task_id: Optional[str] = None, selected_factors: Optional[List[str]] = None) -> pd.DataFrame:

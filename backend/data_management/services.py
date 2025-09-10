@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 ANALYSIS_RESULTS_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_LOCK = threading.Lock()
 
+# Global semaphore to limit concurrent analysis tasks (only 1 at a time)
+ANALYSIS_SEMAPHORE = threading.Semaphore(1)
+
 
 def get_cached_analysis_results(task_id: Optional[str] = None) -> Dict[str, Any]:
     """Get cached analysis results. If task_id is provided, get specific task results."""
@@ -58,16 +61,38 @@ def clear_analysis_cache(task_id: Optional[str] = None) -> None:
 
 
 
-def run_analysis_wrapper(task_id: str, top_n: int, selected_factors: Optional[List[str]] = None, collect_latest_data: bool = True, stop_event: Optional[threading.Event] = None):
+def run_analysis_wrapper(task_id: str, top_n: int, selected_factors: Optional[List[str]] = None, collect_latest_data: bool = True, period: Optional[str] = "day", stop_event: Optional[threading.Event] = None):
     """Wrapper to handle task errors properly and cleanup registries"""
     error_occurred = False
+    semaphore_acquired = False
+    
     try:
-        run_analysis_task(task_id, top_n, selected_factors, collect_latest_data, stop_event=stop_event)
+        # Try to acquire semaphore with timeout to prevent blocking indefinitely
+        if not ANALYSIS_SEMAPHORE.acquire(timeout=5):
+            logger.warning(f"Task {task_id} could not acquire semaphore - another analysis is running")
+            task = get_task(task_id)
+            if task:
+                task.status = TaskStatus.FAILED
+                task.message = "无法启动分析：已有其他分析任务正在运行，请等待完成后重试"
+                task.completed_at = datetime.now().isoformat()
+                from utils import bump_task_version
+                bump_task_version(task_id)
+            return
+        
+        semaphore_acquired = True
+        logger.info(f"Task {task_id} acquired analysis semaphore, starting execution")
+        
+        run_analysis_task(task_id, top_n, selected_factors, collect_latest_data, period, stop_event=stop_event)
     except Exception as e:
         logger.error(f"Task {task_id} failed: {e}")
         handle_task_error(task_id, e)
         error_occurred = True
     finally:
+        # Release semaphore first
+        if semaphore_acquired:
+            ANALYSIS_SEMAPHORE.release()
+            logger.info(f"Task {task_id} released analysis semaphore")
+        
         # Cleanup thread and stop event registries once task ends
         try:
             TASK_THREADS.pop(task_id, None)
@@ -79,19 +104,35 @@ def run_analysis_wrapper(task_id: str, top_n: int, selected_factors: Optional[Li
         logger.error(f"Task {task_id} encountered an error and was marked as failed")
 
 
-def create_analysis_task(top_n: int = 50, selected_factors: Optional[List[str]] = None, collect_latest_data: bool = True) -> str:
+def create_analysis_task(top_n: int = 50, selected_factors: Optional[List[str]] = None, collect_latest_data: bool = True, period: Optional[str] = "day") -> str:
     """Create and start a new analysis task"""
+    # Check if there are any running tasks
+    from utils import get_all_tasks
+    running_tasks = [task for task in get_all_tasks().values() if task.status == TaskStatus.RUNNING]
+    
     task_id = str(uuid4())
     
-    task = Task(
-        task_id=task_id,
-        status=TaskStatus.PENDING,
-        progress=0.0,
-        message="任务已创建，等待开始",
-        created_at=datetime.now().isoformat(),
-        top_n=top_n,
-        selected_factors=selected_factors
-    )
+    if running_tasks:
+        # Create task but mark it as pending with appropriate message
+        task = Task(
+            task_id=task_id,
+            status=TaskStatus.PENDING,
+            progress=0.0,
+            message=f"任务已创建，等待其他任务完成（当前有{len(running_tasks)}个任务运行中）",
+            created_at=datetime.now().isoformat(),
+            top_n=top_n,
+            selected_factors=selected_factors
+        )
+    else:
+        task = Task(
+            task_id=task_id,
+            status=TaskStatus.PENDING,
+            progress=0.0,
+            message="任务已创建，正在启动",
+            created_at=datetime.now().isoformat(),
+            top_n=top_n,
+            selected_factors=selected_factors
+        )
     
     add_task(task)
     
@@ -100,7 +141,7 @@ def create_analysis_task(top_n: int = 50, selected_factors: Optional[List[str]] 
     TASK_STOP_EVENTS[task_id] = stop_event
     
     # Start background thread with error wrapper
-    thread = threading.Thread(target=run_analysis_wrapper, args=(task_id, top_n, selected_factors, collect_latest_data, stop_event))
+    thread = threading.Thread(target=run_analysis_wrapper, args=(task_id, top_n, selected_factors, collect_latest_data, period, stop_event))
     thread.daemon = True
     TASK_THREADS[task_id] = thread
     thread.start()

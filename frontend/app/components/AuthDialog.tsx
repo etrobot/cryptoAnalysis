@@ -116,7 +116,7 @@ export function AuthDialog({
           </div>
 
           {error && (
-            <div className="text-red-500 text-sm bg-red-50 p-2 rounded dark:bg-red-900/20 dark:border-red-800">
+            <div className="text-pink-500 text-sm bg-red-50 p-2 rounded dark:bg-red-900/20 dark:border-red-800">
               {error}
             </div>
           )}

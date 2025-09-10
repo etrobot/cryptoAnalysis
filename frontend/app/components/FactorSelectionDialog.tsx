@@ -15,7 +15,7 @@ import { api } from '../services/api'
 interface FactorSelectionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onConfirm: (selectedFactors: string[], collectLatestData: boolean) => void
+  onConfirm: (selectedFactors: string[], period: string, quantity: number, collectLatestData: boolean) => void
 }
 
 export function FactorSelectionDialog({ 
@@ -56,12 +56,15 @@ export function FactorSelectionDialog({
     }
   }
 
+  const [period, setPeriod] = useState<'hour' | '4hour' | 'day'>('day')
+  const [quantity, setQuantity] = useState(10)
+
   const handleConfirm = () => {
     if (selectedFactors.length === 0) {
       alert('请至少选择一个因子')
       return
     }
-    onConfirm(selectedFactors, collectLatestData)
+    onConfirm(selectedFactors, period, quantity, collectLatestData)
     onOpenChange(false)
   }
 
@@ -164,6 +167,39 @@ export function FactorSelectionDialog({
                 <p className="text-xs text-muted-foreground dark:text-gray-400">
                   勾选后会获取最新的热点数据，不勾选则直接使用日K线历史数据进行因子计算
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 周期和数量选项 */}
+          <div className="border-t pt-4 mt-4 dark:border-gray-700">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">
+                  计算周期
+                </label>
+                <select
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value as 'hour' | '4hour' | 'day')}
+                  className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
+                >
+                  <option value="hour">小时线</option>
+                  <option value="4hour">4小时线</option>
+                  <option value="day">日线</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">
+                  显示数量
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
+                />
               </div>
             </div>
           </div>

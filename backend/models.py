@@ -37,6 +37,7 @@ class RunRequest(BaseModel):
     top_n: int = 50
     selected_factors: Optional[List[str]] = None
     collect_latest_data: bool = True
+    period: Optional[str] = "day"  # 'hour', '4hour', 'day'
 
 class RunResponse(BaseModel):
     task_id: str
@@ -110,39 +111,6 @@ class DailyMarketData(SQLModel, table=True):
     volume: float = Field(description="成交量")
     amount: Optional[float] = Field(description="成交额")
     change_pct: float = Field(description="涨跌百分比")
-
-
-class WeeklyMarketData(SQLModel, table=True):
-    """周行情表"""
-    __tablename__ = "weekly_market_data"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    symbol: str = Field(foreign_key="crypto_symbol.symbol", description="交易对")
-    date: dt_date = Field(description="周结束日期")
-    open_price: float = Field(description="开盘价")
-    high_price: float = Field(description="最高价")
-    low_price: float = Field(description="最低价")
-    close_price: float = Field(description="收盘价")
-    volume: float = Field(description="成交量")
-    amount: Optional[float] = Field(description="成交额")
-    change_pct: float = Field(description="涨跌百分比")
-
-
-class MonthlyMarketData(SQLModel, table=True):
-    """月行情表"""
-    __tablename__ = "monthly_market_data"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    symbol: str = Field(foreign_key="crypto_symbol.symbol", description="交易对")
-    date: dt_date = Field(description="月结束日期")
-    open_price: float = Field(description="开盘价")
-    high_price: float = Field(description="最高价")
-    low_price: float = Field(description="最低价")
-    close_price: float = Field(description="收盘价")
-    volume: float = Field(description="成交量")
-    amount: Optional[float] = Field(description="成交额")
-    change_pct: float = Field(description="涨跌百分比")
-
 
 class HourlyMarketData(SQLModel, table=True):
    """小时行情表 (UTC)"""
