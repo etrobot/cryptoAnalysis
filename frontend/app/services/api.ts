@@ -27,14 +27,13 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  async startAnalysis(topN: number = 50, selectedFactors?: string[], collectLatestData: boolean = true, period: string = "day"): Promise<RunResponse> {
+  async startAnalysis(topN: number = 50, selectedFactors?: string[], collectLatestData: boolean = true): Promise<RunResponse> {
     return apiCall<RunResponse>('/run', {
       method: 'POST',
       body: JSON.stringify({ 
         top_n: topN,
         selected_factors: selectedFactors,
-        collect_latest_data: collectLatestData,
-        period: period
+        collect_latest_data: collectLatestData
       }),
     })
   },
@@ -60,7 +59,7 @@ export const api = {
     return apiCall<FactorListResponse>('/factors')
   },
 
-  async startNewsEvaluation(topN: number = 10, newsPerSymbol: number = 3, openaiModel: string = "gpt-3.5-turbo"): Promise<RunResponse> {
+  async startNewsEvaluation(topN: number = 10, newsPerSymbol: number = 3, openaiModel: string = "gpt-oss-120b"): Promise<RunResponse> {
     return apiCall<RunResponse>('/run-news-evaluation', {
       method: 'POST',
       body: JSON.stringify({ 
@@ -93,6 +92,33 @@ export function createTaskStatusPoller(
   const pollInterval = setInterval(async () => {
     try {
       const taskResult = await api.getTaskStatus(taskId)
+      onUpdate(taskResult)
+
+      if (taskResult.status === 'completed' || taskResult.status === 'cancelled') {
+        clearInterval(pollInterval)
+        onComplete(taskResult)
+      } else if (taskResult.status === 'failed') {
+        clearInterval(pollInterval)
+        onError(taskResult.error || '任务执行失败')
+      }
+    } catch (err) {
+      clearInterval(pollInterval)
+      onError(err instanceof Error ? err.message : 'An error occurred')
+    }
+  }, 1000)
+
+  return () => clearInterval(pollInterval)
+}
+
+export function createNewsTaskStatusPoller(
+  taskId: string,
+  onUpdate: (task: NewsTaskResult) => void,
+  onComplete: (task: NewsTaskResult) => void,
+  onError: (error: string) => void
+): () => void {
+  const pollInterval = setInterval(async () => {
+    try {
+      const taskResult = await api.getNewsTaskStatus(taskId)
       onUpdate(taskResult)
 
       if (taskResult.status === 'completed' || taskResult.status === 'cancelled') {

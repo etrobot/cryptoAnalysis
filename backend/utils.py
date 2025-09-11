@@ -24,11 +24,13 @@ TASK_STOP_EVENTS: Dict[str, _threading.Event] = {}
 # Simple change-tracking for SSE streams
 TASK_VERSIONS: Dict[str, int] = {}
 
+
 def bump_task_version(task_id: str):
     try:
         TASK_VERSIONS[task_id] = TASK_VERSIONS.get(task_id, 0) + 1
     except Exception:
         pass
+
 
 def update_task_progress(task_id: str, progress: float, message: str):
     """Update task progress"""
@@ -38,6 +40,7 @@ def update_task_progress(task_id: str, progress: float, message: str):
         bump_task_version(task_id)
         logger.info(f"Task {task_id}: {progress:.1%} - {message}")
 
+
 def handle_task_error(task_id: str, error: Exception):
     """Handle task errors by updating task status"""
     task = TASKS[task_id]
@@ -45,6 +48,7 @@ def handle_task_error(task_id: str, error: Exception):
     task.error = str(error)
     task.message = f"分析失败: {str(error)}"
     task.completed_at = datetime.now().isoformat()
+
 
 def get_task(task_id: str) -> Optional[Task]:
     """Get task by ID"""

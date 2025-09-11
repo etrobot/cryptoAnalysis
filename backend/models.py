@@ -37,12 +37,13 @@ class RunRequest(BaseModel):
     top_n: int = 50
     selected_factors: Optional[List[str]] = None
     collect_latest_data: bool = True
-    period: Optional[str] = "day"  # 'hour', '4hour', 'day'
+
 
 class NewsEvaluationRequest(BaseModel):
     top_n: int = 10
     news_per_symbol: int = 3
-    openai_model: str = "gpt-3.5-turbo"
+    openai_model: str = "gpt-oss-120b"
+
 
 class RunResponse(BaseModel):
     task_id: str
@@ -65,6 +66,17 @@ class TaskResult(BaseModel):
     error: Optional[str] = None
 
 
+class NewsTaskResult(BaseModel):
+    task_id: str
+    status: TaskStatus
+    progress: float
+    message: str
+    created_at: str
+    completed_at: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
 class Message(BaseModel):
     message: str
 
@@ -82,30 +94,44 @@ class AuthResponse(BaseModel):
 
 # 数据库模型
 
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
-    
-    id: str = Field(default_factory=lambda: ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8)), primary_key=True)
+
+    id: str = Field(
+        default_factory=lambda: "".join(
+            secrets.choice(string.ascii_letters + string.digits) for _ in range(8)
+        ),
+        primary_key=True,
+    )
     name: Optional[str] = None
     email: str
     image: Optional[str] = None
-    created_at: dt_datetime = Field(default_factory=lambda: dt_datetime.now(timezone.utc))
+    created_at: dt_datetime = Field(
+        default_factory=lambda: dt_datetime.now(timezone.utc)
+    )
 
 
 class CryptoSymbol(SQLModel, table=True):
     """加密货币交易对基本信息"""
+
     __tablename__ = "crypto_symbol"
-    
+
     symbol: str = Field(primary_key=True, description="交易对，例如 BTCUSDT")
     name: str = Field(description="名称，例如 BTC/USDT")
-    created_at: dt_datetime = Field(default_factory=dt_datetime.now, description="创建时间")
-    updated_at: dt_datetime = Field(default_factory=dt_datetime.now, description="更新时间")
+    created_at: dt_datetime = Field(
+        default_factory=dt_datetime.now, description="创建时间"
+    )
+    updated_at: dt_datetime = Field(
+        default_factory=dt_datetime.now, description="更新时间"
+    )
 
 
 class DailyMarketData(SQLModel, table=True):
     """日行情表"""
+
     __tablename__ = "daily_market_data"
-    
+
     id: Optional[int] = Field(default=None, primary_key=True)
     symbol: str = Field(foreign_key="crypto_symbol.symbol", description="交易对")
     date: dt_date = Field(description="日期")
@@ -117,27 +143,15 @@ class DailyMarketData(SQLModel, table=True):
     amount: Optional[float] = Field(description="成交额")
     change_pct: float = Field(description="涨跌百分比")
 
-class HourlyMarketData(SQLModel, table=True):
-   """小时行情表 (UTC)"""
-   __tablename__ = "hourly_market_data"
-
-   id: Optional[int] = Field(default=None, primary_key=True)
-   symbol: str = Field(foreign_key="crypto_symbol.symbol", description="交易对", index=True)
-   datetime: dt_datetime = Field(description="时间(UTC)", index=True)
-   open_price: float = Field(description="开盘价")
-   high_price: float = Field(description="最高价")
-   low_price: float = Field(description="最低价")
-   close_price: float = Field(description="收盘价")
-   volume: float = Field(description="成交量")
-   amount: Optional[float] = Field(description="成交额")
-   change_pct: float = Field(description="涨跌百分比")
-
 
 # 数据库连接配置
 # 使用环境变量配置数据库路径，支持Docker挂载
 import os
+
 BASE_DIR = Path(__file__).parent
-DATABASE_PATH = os.getenv("DATABASE_PATH", str(BASE_DIR / "data_management" / "crypto_data.db"))
+DATABASE_PATH = os.getenv(
+    "DATABASE_PATH", str(BASE_DIR / "data_management" / "crypto_data.db")
+)
 # 确保数据库目录存在
 Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
@@ -150,6 +164,7 @@ def create_db_and_tables():
 
 
 # ---- Factor plugin types ----
+
 
 class Factor(BaseModel):
     id: str

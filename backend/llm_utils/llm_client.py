@@ -3,8 +3,37 @@ import json
 import logging
 from typing import Dict, Any
 import openai
+import os
 
 logger = logging.getLogger(__name__)
+
+def get_llm_client(scheme='openai'):
+    """
+    获取 OpenAI 或其他 LLM 服务的客户端
+
+    Args:
+        scheme: 客户端类型，支持 'openai' 和 'siliconflow'
+
+    Returns:
+        openai.Client: 配置好的客户端实例
+    """
+    try:
+        api_key = os.getenv('OPENAI_API_KEY')
+        base_url = os.getenv('OPENAI_BASE_URL')
+        
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+            
+        client_kwargs = {'api_key': api_key}
+        if base_url:
+            client_kwargs['base_url'] = base_url
+            
+        client = openai.OpenAI(**client_kwargs)
+        logger.info(f"已成功初始化 {scheme} 客户端")
+        return client
+    except Exception as e:
+        logger.error(f"初始化 {scheme} 客户端出错: {e}")
+        raise
 
 def llm_gen_dict(client: openai.Client, model: str, query: str, format_example: Dict, stream: bool = False) -> Dict:
     """
@@ -65,12 +94,12 @@ def llm_gen_dict(client: openai.Client, model: str, query: str, format_example: 
         logger.error(f"LLM调用失败: {e}")
         return {}
 
-def evaluate_content_with_llm(client: openai.Client, model: str, content: str, criteria_dict: Dict) -> Dict:
+def evaluate_content_with_llm(model: str, content: str, criteria_dict: Dict, category: str) -> Dict:
     """
     使用OpenAI API评估内容
 
     Args:
-        client: OpenAI客户端实例
+        model: 模型名称
         model: 模型名称
         content: 待评估的内容
         criteria_dict: 评估标准字典
@@ -86,55 +115,51 @@ def evaluate_content_with_llm(client: openai.Client, model: str, content: str, c
     """
 
     # 构建输出格式示例
-    format_example = {"criteria_name":{"score":"1-5", "explanation":"中文评分说明"}}
+    format_example = {
+        "category":"category_name",
+        "criteria_name_1":{"score":"1-5", "explanation":"中文评分说明"},
+        "criteria_name_2":{"score":"1-5", "explanation":"中文评分说明"},
+        "criteria_name_...":{"score":"1-5", "explanation":"..."},
+    }
     
-    query = content + """
+    criteria_text = json.dumps(criteria_dict, ensure_ascii=False, indent=2)
+    query = content + f"""
 按标准评估以上内容：
-{
-  "技术创新与替代潜力": {
-    "1分": "技术陈旧，缺乏创新，面临被新协议或链淘汰的风险，生态增长停滞",
-    "2分": "技术有渐进式改进，但无显著优势，难以挑战现有主流公链或协议",
-    "3分": "技术具备替代潜力（如高TPS、Layer 2优化），处于测试网或早期部署阶段",
-    "4分": "替代趋势明确，新技术渗透率快速提升（生态TVL或用户增长10%-30%），开发者采用增加",
-    "5分": "革命性技术确立主导地位（如新共识机制、跨链协议），渗透率>30%，旧技术被快速取代"
-  },
-  "监管与政策环境": {
-    "1分": "受严格监管限制（如交易禁令、税收重压），发展空间严重受限",
-    "2分": "监管环境中性，无明确支持或限制，政策不确定性较高",
-    "3分": "获得一般性政策支持（如纳入国家区块链规划），但具体措施尚未落地",
-    "4分": "获得实质性政策支持（如监管沙盒、税收减免、试点项目），合规性增强",
-    "5分": "国家级战略重点（如数字货币储备、跨境支付试点），多重政策红利叠加，监管环境极度友好"
-  },
-  "市场表现与增长": {
-    "1分": "价格下滑或交易量萎缩，增长率≤0%，市场关注度低（如X提及量<1万次/月）",
-    "2分": "温和增长，价格/交易量增长0%-15%，与市场平均水平相当，缺乏爆发力",
-    "3分": "较快增长，价格/交易量增长15%-30%，TVL或链上活动显现成长性",
-    "4分": "高速增长，价格/交易量增长30%-50%，显著超越市场平均，机构/鲸鱼积累明显",
-    "5分": "爆发式增长，价格/交易量增长>50%，可持续性强（如ETF流入、CME期货活跃）"
-  },
-  "社区与生态支持": {
-    "1分": "社区活跃度低，开发者流失，核心团队不稳定或存在负面事件（如减持、退出）",
-    "2分": "社区稳定但无显著增长，开发者参与有限，生态扩展缓慢",
-    "3分": "社区活跃度提升，引入激励机制（如质押、治理代币），开发者数量增长",
-    "4分": "知名机构或项目方加入生态（如Layer 2、DeFi协议），社区扩张迅速，X讨论量激增",
-    "5分": "生态主导市场（如DeFi/NFT龙头），核心社区全球影响力强，顶级资本或开发者全面支持"
-  },
-  "需求与应用场景": {
-    "1分": "应用场景萎缩，产品/服务被替代或过度竞争（如低效公链、单一功能代币）",
-    "2分": "需求稳定，满足基础支付或存储需求，增长空间有限",
-    "3分": "需求升级，用户为效率或体验支付溢价（如DeFi收益、NFT收藏），场景扩展中",
-    "4分": "新需求爆发，服务于金融、娱乐、AI等高价值场景，链上交易量快速增长",
-    "5分": "创造全新需求，定义新品类（如RWA代币化、AI代理），市场空间彻底打开"
-  }
-}
-"""
+{criteria_text}
+"""+'并添加分类名称比如“激光设备(先进制造)”，必须来自以下分类：'+category
     
+    client = get_llm_client()
     # 使用 llm_gen_dict 来强约束输出为 python 字典
     result = llm_gen_dict(client, model, query, format_example, stream=False)
 
-    total_score = sum(int(v['score']) for v in result.values())/5*100/len(result)
-    top_criterion = max(result.items(), key=lambda x: x[1]['score'])[0]
-    top_score = int(max(result.items(), key=lambda x: x[1]['score'])[1]['score'])/5*100
+    # 检查result是否为None或空字典
+    if not result or not isinstance(result, dict):
+        logger.error(f"LLM evaluation failed, result is: {result}")
+        return {
+            "criteria_result": {},
+            "overall_score": 0,
+            "detailed_scores": {},
+            "top_scoring_criterion": "评估失败",
+            "top_score": 0,
+        }
+
+    # 过滤掉非评估标准的字段（如category）
+    criteria_results = {k: v for k, v in result.items() 
+                       if isinstance(v, dict) and 'score' in v}
+    
+    if not criteria_results:
+        logger.error(f"No valid criteria results found in: {result}")
+        return {
+            "criteria_result": result,
+            "overall_score": 0,
+            "detailed_scores": result,
+            "top_scoring_criterion": "无有效评估",
+            "top_score": 0,
+        }
+
+    total_score = sum(int(v['score']) for v in criteria_results.values())/5*100/len(criteria_results)
+    top_criterion = max(criteria_results.items(), key=lambda x: int(x[1]['score']))[0]
+    top_score = int(max(criteria_results.items(), key=lambda x: int(x[1]['score']))[1]['score'])/5*100
     
     return {
         "criteria_result": result,

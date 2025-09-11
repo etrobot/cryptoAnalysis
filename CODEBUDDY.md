@@ -2,6 +2,7 @@
 
 ## Development Commands
 for exposing problems, avoid try catch as much as possible
+fix promblem without modifying params
 
 ### Fullstack Development
 - `pnpm run install:all`: Install all dependencies (frontend and backend)

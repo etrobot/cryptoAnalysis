@@ -13,11 +13,32 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from models import RunRequest, RunResponse, TaskResult, Message, AuthRequest, AuthResponse, NewsEvaluationRequest, create_db_and_tables, User, get_session
+from models import (
+    RunRequest,
+    RunResponse,
+    TaskResult,
+    NewsTaskResult,
+    Message,
+    AuthRequest,
+    AuthResponse,
+    NewsEvaluationRequest,
+    create_db_and_tables,
+    User,
+    get_session,
+)
 from sqlmodel import select
 from api import (
-    read_root, run_analysis, get_task_status, get_latest_results, list_all_tasks,
-    stop_analysis, login_user, run_news_evaluation
+    read_root,
+    run_analysis,
+    get_task_status,
+    get_latest_results,
+    list_all_tasks,
+    stop_analysis,
+    login_user,
+    run_news_evaluation,
+    get_task_status_universal,
+    stop_task_universal,
+    get_latest_results_universal,
 )
 from utils import get_task, TASK_VERSIONS
 from factors import list_factors
@@ -27,7 +48,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Suppress warnings
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 app = FastAPI(title="Crypto Analysis")
 
@@ -35,21 +56,21 @@ app = FastAPI(title="Crypto Analysis")
 create_db_and_tables()
 logger.info("Database initialized successfully")
 
+
 def create_admin_user():
     """Create admin user from environment variables if provided"""
-    admin_username = os.getenv('ADMIN_USERNAME')
-    admin_email = os.getenv('ADMIN_EMAIL')
-    
+    admin_username = os.getenv("ADMIN_USERNAME")
+    admin_email = os.getenv("ADMIN_EMAIL")
+
     if admin_username and admin_email:
         try:
             with next(get_session()) as session:
                 # Check if admin user already exists
                 statement = select(User).where(
-                    User.name == admin_username,
-                    User.email == admin_email
+                    User.name == admin_username, User.email == admin_email
                 )
                 existing_user = session.exec(statement).first()
-                
+
                 if not existing_user:
                     # Create new admin user
                     admin_user = User(name=admin_username, email=admin_email)
@@ -57,11 +78,14 @@ def create_admin_user():
                     session.commit()
                     logger.info(f"Admin user created: {admin_username} ({admin_email})")
                 else:
-                    logger.info(f"Admin user already exists: {admin_username} ({admin_email})")
+                    logger.info(
+                        f"Admin user already exists: {admin_username} ({admin_email})"
+                    )
         except Exception as e:
             logger.error(f"Failed to create admin user: {e}")
     else:
         logger.info("No admin user credentials provided in environment variables")
+
 
 # Create admin user if credentials are provided
 create_admin_user()
@@ -121,6 +145,7 @@ if os.path.exists(static_dir):
             return FileResponse(path)
         return {"detail": "favicon.ico not found"}
 
+
 # Explicit root route: return index.html
 @app.get("/", include_in_schema=False)
 async def root_index():
@@ -141,19 +166,20 @@ def run_news_eval(request: NewsEvaluationRequest) -> RunResponse:
     return run_news_evaluation(request)
 
 
-@app.get("/task/{task_id}", response_model=TaskResult)
-def get_task_route(task_id: str) -> TaskResult:
-    return get_task_status(task_id)
+@app.get("/task/{task_id}", response_model=TaskResult | NewsTaskResult)
+def get_task_route(task_id: str):
+    return get_task_status_universal(task_id)
 
 
-@app.post("/task/{task_id}/stop", response_model=TaskResult)
-def stop_task(task_id: str) -> TaskResult:
-    return stop_analysis(task_id)
+@app.post("/task/{task_id}/stop", response_model=TaskResult | NewsTaskResult)
+def stop_task(task_id: str):
+    return stop_task_universal(task_id)
 
 
-@app.get("/results", response_model=TaskResult | Message)
+@app.get("/results", response_model=TaskResult | NewsTaskResult | Message)
 def get_results():
-    return get_latest_results()
+    return get_latest_results_universal()
+
 
 # SSE stream for task updates
 @app.get("/task/{task_id}/events")
@@ -166,6 +192,7 @@ async def task_events(task_id: str):
         task = get_task(task_id)
         if task is not None:
             from models import TaskResult
+
             initial = TaskResult(
                 task_id=task.task_id,
                 status=task.status,
@@ -178,7 +205,7 @@ async def task_events(task_id: str):
                 data=task.result["data"] if task.result else None,
                 count=task.result["count"] if task.result else None,
                 extended=task.result.get("extended") if task.result else None,
-                error=task.error
+                error=task.error,
             )
             yield f"event: update\n"
             yield f"data: {initial.model_dump_json()}\n\n"
@@ -195,6 +222,7 @@ async def task_events(task_id: str):
                 if task is None:
                     break
                 from models import TaskResult
+
                 update = TaskResult(
                     task_id=task.task_id,
                     status=task.status,
@@ -207,7 +235,7 @@ async def task_events(task_id: str):
                     data=task.result["data"] if task.result else None,
                     count=task.result["count"] if task.result else None,
                     extended=task.result.get("extended") if task.result else None,
-                    error=task.error
+                    error=task.error,
                 )
                 yield f"event: update\n"
                 yield f"data: {update.model_dump_json()}\n\n"
@@ -216,8 +244,10 @@ async def task_events(task_id: str):
             task = get_task(task_id)
             if task:
                 from models import TaskStatus as _TS
+
                 if task.status in (_TS.COMPLETED, _TS.FAILED, _TS.CANCELLED):
                     break
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
@@ -233,13 +263,16 @@ def get_factors() -> Dict[str, object]:
     # Normalize to simple JSON metadata
     items = []
     for f in factors:
-        items.append({
-            "id": f.id,
-            "name": f.name,
-            "description": f.description,
-            "columns": f.columns,
-        })
+        items.append(
+            {
+                "id": f.id,
+                "name": f.name,
+                "description": f.description,
+                "columns": f.columns,
+            }
+        )
     return {"items": items}
+
 
 # Authentication routes
 @app.post("/api/auth/login", response_model=AuthResponse)
@@ -253,11 +286,11 @@ def login(request: AuthRequest) -> AuthResponse:
 async def serve_frontend(full_path: str):
     """Serve frontend files for production"""
     static_dir = os.path.join(os.path.dirname(__file__), "static")
-    
+
     # If static directory doesn't exist, return API info
     if not os.path.exists(static_dir):
         return {"message": "Crypto Analysis API", "docs": "/docs"}
-    
+
     # Handle root path - serve index.html
     if full_path == "":
         index_path = os.path.join(static_dir, "index.html")
@@ -265,17 +298,17 @@ async def serve_frontend(full_path: str):
             return FileResponse(index_path)
         # Fallback to API info if frontend not built
         return {"message": "Crypto Analysis API", "docs": "/docs"}
-    
+
     # Try to serve the requested file
     file_path = os.path.join(static_dir, full_path)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
-    
+
     # For SPA routing, serve index.html for non-API routes
     if not full_path.startswith("api/") and not full_path.startswith("docs"):
         index_path = os.path.join(static_dir, "index.html")
         if os.path.isfile(index_path):
             return FileResponse(index_path)
-    
+
     # Return 404 for API routes or missing files
     return {"detail": "Not found"}

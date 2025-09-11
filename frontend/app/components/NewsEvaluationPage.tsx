@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Play, Square, RefreshCw, TrendingUp, Newspaper, AlertCircle, CheckCircle } from 'lucide-react'
+import { Play, Square, RefreshCw, TrendingUp, Newspaper, AlertCircle, CheckCircle, Settings } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Progress } from './ui/progress'
 import { Badge } from './ui/badge'
-import { api, createTaskStatusPoller } from '../services/api'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { api, createNewsTaskStatusPoller } from '../services/api'
 import { NewsTaskResult, NewsEvaluationResult, TaskStatus } from '../types'
 import { useIsMobile } from '../hooks/use-mobile'
+import { AuthDialog } from './AuthDialog'
 
 export function NewsEvaluationPage() {
   const [currentTask, setCurrentTask] = useState<NewsTaskResult | null>(null)
@@ -14,13 +16,15 @@ export function NewsEvaluationPage() {
   const [latestResults, setLatestResults] = useState<NewsTaskResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stopPoller, setStopPoller] = useState<(() => void) | null>(null)
+  const [showConfigDialog, setShowConfigDialog] = useState(false)
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
   
   const isMobile = useIsMobile()
 
   // Configuration state
   const [topN, setTopN] = useState(10)
   const [newsPerSymbol, setNewsPerSymbol] = useState(3)
-  const [openaiModel] = useState("gpt-3.5-turbo")
+  const [openaiModel] = useState("gpt-oss-120b")
 
   const loadLatestResults = useCallback(async () => {
     try {
@@ -35,10 +39,19 @@ export function NewsEvaluationPage() {
     loadLatestResults()
   }, [loadLatestResults])
 
+  const handleRunClick = () => {
+    setShowAuthDialog(true)
+  }
+
+  const handleAuthSuccess = () => {
+    setShowConfigDialog(true)
+  }
+
   const startNewsEvaluation = async () => {
     try {
       setIsLoading(true)
       setError(null)
+      setShowConfigDialog(false)
       
       const response = await api.startNewsEvaluation(topN, newsPerSymbol, openaiModel)
       
@@ -53,19 +66,13 @@ export function NewsEvaluationPage() {
       setCurrentTask(initialTask)
       
       // Start polling for updates
-      const poller = createTaskStatusPoller(
+      const poller = createNewsTaskStatusPoller(
         response.task_id,
         (task) => {
-          setCurrentTask({
-            ...task,
-            result: task.data ? { data: task.data } as any : undefined
-          } as NewsTaskResult)
+          setCurrentTask(task)
         },
         (task) => {
-          setCurrentTask({
-            ...task,
-            result: task.data ? { data: task.data } as any : undefined
-          } as NewsTaskResult)
+          setCurrentTask(task)
           setIsLoading(false)
           loadLatestResults()
         },
@@ -129,48 +136,10 @@ export function NewsEvaluationPage() {
             <p className="text-muted-foreground">基于成交额Top币种的新闻内容进行AI评估</p>
           </div>
         </div>
-
-        {/* Control Panel */}
-        <Card>
-          <CardHeader>
-            <CardTitle>评估配置</CardTitle>
-            <CardDescription>
-              配置新闻评估参数并启动分析任务
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">成交额Top币种数量</label>
-                <select 
-                  value={topN} 
-                  onChange={(e) => setTopN(Number(e.target.value))}
-                  className="w-full mt-1 p-2 border rounded-md"
-                  disabled={isLoading}
-                >
-                  <option value={5}>Top 5</option>
-                  <option value={10}>Top 10</option>
-                  <option value={20}>Top 20</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">每个币种新闻数量</label>
-                <select 
-                  value={newsPerSymbol} 
-                  onChange={(e) => setNewsPerSymbol(Number(e.target.value))}
-                  className="w-full mt-1 p-2 border rounded-md"
-                  disabled={isLoading}
-                >
-                  <option value={1}>1条</option>
-                  <option value={3}>3条</option>
-                  <option value={5}>5条</option>
-                </select>
-              </div>
-            </div>
-            
+        <div className="flex items-center gap-2">
             <div className="flex gap-2">
               <Button 
-                onClick={startNewsEvaluation} 
+                onClick={handleRunClick} 
                 disabled={isLoading}
                 className="flex items-center gap-2"
               >
@@ -189,8 +158,11 @@ export function NewsEvaluationPage() {
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
+            
+            <div className="text-sm text-muted-foreground">
+              当前配置: Top {topN} 币种，每个币种 {newsPerSymbol} 条新闻
+            </div>
+          </div>
 
         {/* Current Task Status */}
         {currentTask && (
@@ -296,6 +268,69 @@ export function NewsEvaluationPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Configuration Dialog */}
+        <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                评估配置
+              </DialogTitle>
+              <DialogDescription>
+                配置新闻评估参数
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">成交额Top币种数量</label>
+                <select 
+                  value={topN} 
+                  onChange={(e) => setTopN(Number(e.target.value))}
+                  className="w-full mt-1 p-2 border rounded-md"
+                >
+                  <option value={5}>Top 5</option>
+                  <option value={10}>Top 10</option>
+                  <option value={20}>Top 20</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">每个币种新闻数量</label>
+                <select 
+                  value={newsPerSymbol} 
+                  onChange={(e) => setNewsPerSymbol(Number(e.target.value))}
+                  className="w-full mt-1 p-2 border rounded-md"
+                >
+                  <option value={1}>1条</option>
+                  <option value={3}>3条</option>
+                  <option value={5}>5条</option>
+                </select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowConfigDialog(false)}
+              >
+                取消
+              </Button>
+              <Button onClick={startNewsEvaluation}>
+                开始评估
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Authentication Dialog */}
+        <AuthDialog
+          open={showAuthDialog}
+          onOpenChange={setShowAuthDialog}
+          onSuccess={handleAuthSuccess}
+          title="新闻评估权限验证"
+          description="请输入用户名和邮箱以开始新闻评估任务"
+        />
       </div>
     </div>
   )
