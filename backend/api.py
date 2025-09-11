@@ -141,29 +141,55 @@ def list_all_tasks() -> List[TaskResult]:
 
 
 def login_user(request: AuthRequest) -> AuthResponse:
-    """User authentication with username and email"""
+    """User authentication with username, email and password. Creates user if not exists."""
     try:
+        import hashlib
         with next(get_session()) as session:
-            # Check if user exists with matching name and email
+            # Find user by name and email
             statement = select(User).where(
                 User.name == request.name, User.email == request.email
             )
             user = session.exec(statement).first()
 
-            if user:
-                # User exists, generate token
-                token = f"token_{user.id}"
-                return AuthResponse(success=True, token=token, message="认证成功")
+            if user and user.password_hash:
+                # Verify password for existing user
+                password_hash = hashlib.sha256(request.password.encode()).hexdigest()
+                if password_hash == user.password_hash:
+                    # Authentication successful
+                    token = f"token_{user.id}"
+                    return AuthResponse(success=True, token=token, message="认证成功")
+                else:
+                    # Password incorrect
+                    return AuthResponse(
+                        success=False, 
+                        message="密码错误"
+                    )
             else:
-                # Create new user
-                new_user = User(name=request.name, email=request.email)
+                # User not found, create new user
+                password_hash = hashlib.sha256(request.password.encode()).hexdigest()
+                
+                # Check if this is the first user (admin)
+                all_users_statement = select(User)
+                all_users = session.exec(all_users_statement).all()
+                is_first_user = len(all_users) == 0
+                
+                new_user = User(
+                    name=request.name,
+                    email=request.email,
+                    password_hash=password_hash,
+                    is_admin=is_first_user  # First user becomes admin
+                )
                 session.add(new_user)
                 session.commit()
                 session.refresh(new_user)
-
+                
+                # Generate token for new user
                 token = f"token_{new_user.id}"
+                admin_status = " (管理员)" if is_first_user else ""
                 return AuthResponse(
-                    success=True, token=token, message="用户创建成功，认证通过"
+                    success=True, 
+                    token=token, 
+                    message=f"用户创建成功{admin_status}"
                 )
 
     except Exception as e:

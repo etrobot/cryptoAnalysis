@@ -23,18 +23,19 @@ export function AuthDialog({
   onOpenChange, 
   onSuccess,
   title = "操作权限验证",
-  description = "请输入用户名和邮箱以继续操作"
+  description = "请输入用户名、邮箱和密码以继续操作"
 }: AuthDialogProps) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!username.trim() || !email.trim()) {
-      setError('请输入用户名和邮箱')
+    if (!username.trim() || !email.trim() || !password.trim()) {
+      setError('请输入用户名、邮箱和密码')
       return
     }
 
@@ -49,7 +50,7 @@ export function AuthDialog({
     setError(null)
 
     try {
-      const result = await AuthService.authenticate(username, email)
+      const result = await AuthService.authenticate(username, email, password)
       
       if (result.success) {
         onSuccess()
@@ -57,6 +58,7 @@ export function AuthDialog({
         // 清空表单
         setUsername('')
         setEmail('')
+        setPassword('')
       } else {
         setError(result.error || '认证失败')
       }
@@ -70,6 +72,7 @@ export function AuthDialog({
   const handleCancel = () => {
     setUsername('')
     setEmail('')
+    setPassword('')
     setError(null)
     onOpenChange(false)
   }
@@ -114,6 +117,21 @@ export function AuthDialog({
               disabled={loading}
             />
           </div>
+          
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium dark:text-gray-300">
+              密码
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
+              placeholder="请输入密码"
+              disabled={loading}
+            />
+          </div>
 
           {error && (
             <div className="text-pink-500 text-sm bg-red-50 p-2 rounded dark:bg-red-900/20 dark:border-red-800">
@@ -133,7 +151,7 @@ export function AuthDialog({
             </Button>
             <Button 
               type="submit" 
-              disabled={loading || !username.trim() || !email.trim()}
+              disabled={loading || !username.trim() || !email.trim() || !password.trim()}
             >
               {loading ? '验证中...' : '确认'}
             </Button>

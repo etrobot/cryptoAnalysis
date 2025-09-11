@@ -15,6 +15,7 @@ dependencies = [
     "pybit",
     "python-dotenv",
     "openai",
+    "apscheduler",
 ]
 [tool.uv]
 dev-dependencies = [

@@ -84,6 +84,7 @@ class Message(BaseModel):
 class AuthRequest(BaseModel):
     name: str
     email: str
+    password: str
 
 
 class AuthResponse(BaseModel):
@@ -106,7 +107,9 @@ class User(SQLModel, table=True):
     )
     name: Optional[str] = None
     email: str
+    password_hash: Optional[str] = None  # Store hashed password
     image: Optional[str] = None
+    is_admin: bool = Field(default=False, description="Whether the user is an admin")
     created_at: dt_datetime = Field(
         default_factory=lambda: dt_datetime.now(timezone.utc)
     )

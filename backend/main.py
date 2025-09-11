@@ -58,37 +58,31 @@ logger.info("Database initialized successfully")
 
 
 def create_admin_user():
-    """Create admin user from environment variables if provided"""
-    admin_username = os.getenv("ADMIN_USERNAME")
-    admin_email = os.getenv("ADMIN_EMAIL")
-
-    if admin_username and admin_email:
-        try:
-            with next(get_session()) as session:
-                # Check if admin user already exists
-                statement = select(User).where(
-                    User.name == admin_username, User.email == admin_email
-                )
-                existing_user = session.exec(statement).first()
-
-                if not existing_user:
-                    # Create new admin user
-                    admin_user = User(name=admin_username, email=admin_email)
-                    session.add(admin_user)
-                    session.commit()
-                    logger.info(f"Admin user created: {admin_username} ({admin_email})")
-                else:
-                    logger.info(
-                        f"Admin user already exists: {admin_username} ({admin_email})"
-                    )
-        except Exception as e:
-            logger.error(f"Failed to create admin user: {e}")
-    else:
-        logger.info("No admin user credentials provided in environment variables")
+    """Check if user table is empty - if so, the first user created will be admin"""
+    try:
+        with next(get_session()) as session:
+            # Check if any users exist
+            statement = select(User)
+            existing_users = session.exec(statement).all()
+            
+            if len(existing_users) == 0:
+                logger.info("User table is empty - first user created will automatically be admin")
+            else:
+                logger.info(f"User table has {len(existing_users)} users")
+    except Exception as e:
+        logger.error(f"Failed to check user table: {e}")
 
 
-# Create admin user if credentials are provided
+# Check user table status on startup
 create_admin_user()
+
+# Start the task scheduler
+from scheduler import start_scheduler
+import atexit
+from scheduler import stop_scheduler
+
+start_scheduler()
+atexit.register(stop_scheduler)
 
 # CORS configuration
 origins = [
@@ -273,6 +267,27 @@ def get_factors() -> Dict[str, object]:
         )
     return {"items": items}
 
+
+# Scheduler routes
+@app.get("/api/scheduler/status")
+def get_scheduler_status():
+    """Get scheduler status"""
+    from scheduler import get_scheduler_status
+    return get_scheduler_status()
+
+@app.post("/api/scheduler/stop")
+def stop_scheduled_task():
+    """Stop current scheduled task"""
+    from scheduler import stop_current_scheduled_task
+    success = stop_current_scheduled_task()
+    return {"success": success, "message": "Scheduled task stop requested" if success else "No active scheduled task"}
+
+@app.post("/api/scheduler/enable")
+def enable_scheduler(enabled: bool = True):
+    """Enable or disable scheduled tasks"""
+    from scheduler import enable_scheduled_tasks
+    enable_scheduled_tasks(enabled)
+    return {"success": True, "message": f"Scheduled tasks {'enabled' if enabled else 'disabled'}"}
 
 # Authentication routes
 @app.post("/api/auth/login", response_model=AuthResponse)

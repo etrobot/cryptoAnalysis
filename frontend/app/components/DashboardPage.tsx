@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ResultsTable } from './ResultsTable'
 import { TaskProgressCard } from './TaskProgressCard'
 import { ThemeToggle } from './ThemeToggle'
+import { SchedulerStatus } from './SchedulerStatus'
 import { TaskResult } from '../types'
 import { api, createTaskStatusSSE, ApiError } from '../services/api'
 import { useIsMobile } from '../hooks/use-mobile'
@@ -108,6 +109,8 @@ export function DashboardPage() {
       {isTaskRunning && currentTask && (
         <TaskProgressCard task={currentTask} title="分析任务进度" />
       )}
+
+      <SchedulerStatus />
 
       <ResultsTable
         data={isTaskRunning ? (previousResults?.data || []) : (currentTask?.data || [])}

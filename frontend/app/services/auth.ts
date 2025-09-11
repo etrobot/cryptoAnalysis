@@ -63,7 +63,7 @@ export class AuthService {
   /**
    * 用户认证
    */
-  static async authenticate(username: string, email: string): Promise<{ success: boolean; error?: string }> {
+  static async authenticate(username: string, email: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
       // Use the same API base URL logic as the api service
       const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:14250'
@@ -73,7 +73,7 @@ export class AuthService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: username, email }),
+        body: JSON.stringify({ name: username, email, password }),
       })
 
       if (response.ok) {
