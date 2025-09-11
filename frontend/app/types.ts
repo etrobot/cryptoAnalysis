@@ -86,9 +86,16 @@ export type NewsEvaluationResult = {
   error?: string
 }
 
+export type SunburstData = {
+  name: string
+  value?: number
+  children?: SunburstData[]
+}
+
 export type NewsEvaluationResponse = {
   data: NewsEvaluationResult[]
   count: number
+  sunburst_data?: SunburstData
   summary: {
     total_symbols: number
     total_news: number

@@ -147,6 +147,9 @@ def run_news_evaluation_task(
                     criteria_dict=criteria_dict,
                     category=CATEGORY
                 )
+                
+                # 调试日志
+                logger.info(f"{symbol} 评估结果: {evaluation}")
 
                 # 构建结果
                 result = {
@@ -200,7 +203,9 @@ def run_news_evaluation_task(
         )
 
         # 生成旭日图数据
+        logger.info(f"开始生成旭日图数据，评估结果数量: {len(evaluation_results)}")
         sunburst_data = _generate_sunburst_data(evaluation_results)
+        logger.info(f"旭日图数据生成完成: {sunburst_data}")
 
         # 构建最终结果
         result = {
@@ -285,77 +290,68 @@ def _news_item_to_dict(news_item: NewsItem) -> Dict[str, Any]:
 
 def _generate_sunburst_data(evaluation_results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    生成旭日图数据结构
+    生成旭日图数据结构，基于LLM返回的category分类
     
     结构：
-    - 根节点：加密货币评估
-      - 评分等级分组（优秀、良好、一般、较差）
-        - 具体币种
-          - 评估维度
+    - 根节点：加密货币评估（所有分类的总分）
+      - 第一层：币种分类（从LLM返回的category字段获取）
+        - 第二层：具体币种（该币种的总体评分）
     """
     if not evaluation_results:
         return {"name": "加密货币评估", "children": []}
     
-    # 定义评分等级
-    def get_score_level(score: float) -> str:
-        if score >= 80:
-            return "优秀 (80+)"
-        elif score >= 60:
-            return "良好 (60-79)"
-        elif score >= 40:
-            return "一般 (40-59)"
-        else:
-            return "较差 (<40)"
+    # 按分类组织数据
+    categories_data = {}
     
-    # 按评分等级分组
-    score_groups = {}
+    # 处理每个币种的评估结果
     for result in evaluation_results:
-        overall_score = result["evaluation"]["overall_score"]
-        level = get_score_level(overall_score)
+        symbol = result["base_coin"]
+        criteria_result = result["evaluation"].get("criteria_result", {})
+        overall_score = result["evaluation"].get("overall_score", 0)
         
-        if level not in score_groups:
-            score_groups[level] = []
-        score_groups[level].append(result)
-    
-    # 构建旭日图数据
-    children = []
-    for level, results in score_groups.items():
-        level_children = []
+        # 从LLM返回结果中获取分类
+        category = criteria_result.get("category", "未分类")
         
-        for result in results:
-            symbol = result["base_coin"]
-            evaluation = result["evaluation"]
-            
-            # 为每个币种创建评估维度的子节点
-            dimension_children = []
-            detailed_scores = evaluation.get("detailed_scores", {})
-            
-            for dimension, score in detailed_scores.items():
-                if isinstance(score, (int, float)) and score > 0:
-                    dimension_children.append({
-                        "name": dimension,
-                        "value": round(score, 1)
-                    })
-            
-            # 如果没有详细分数，使用总分
-            if not dimension_children:
-                dimension_children.append({
-                    "name": "总评分",
-                    "value": round(evaluation["overall_score"], 1)
-                })
-            
-            level_children.append({
+        logger.info(f"处理币种 {symbol}, LLM分类: {category}, 总分: {overall_score}")
+        
+        # 初始化分类数据
+        if category not in categories_data:
+            categories_data[category] = []
+        
+        # 添加币种数据（使用总体评分）
+        if overall_score > 0:
+            categories_data[category].append({
                 "name": symbol,
-                "value": round(evaluation["overall_score"], 1),
-                "children": dimension_children
+                "value": round(overall_score, 1)
             })
-        
-        children.append({
-            "name": level,
-            "children": level_children
-        })
+    
+    # 构建旭日图数据结构
+    children = []
+    total_value = 0
+    
+    for category_name, coins in categories_data.items():
+        if coins:  # 只添加有数据的分类
+            # 按分数排序
+            coins.sort(key=lambda x: x["value"], reverse=True)
+            
+            # 计算该分类的总分（所有币种的总分之和）
+            category_total = sum(coin["value"] for coin in coins)
+            total_value += category_total
+            
+            children.append({
+                "name": category_name,
+                "value": round(category_total, 1),
+                "children": coins
+            })
+    
+    # 按分类总分排序
+    children.sort(key=lambda x: x["value"], reverse=True)
+    
+    total_coins = sum(len(category["children"]) for category in children)
+    logger.info(f"生成旭日图数据: {len(children)} 个分类, 总计 {total_coins} 个数据点, 总分值: {total_value}")
     
     return {
         "name": "加密货币评估",
+        "value": round(total_value, 1),
         "children": children
     }

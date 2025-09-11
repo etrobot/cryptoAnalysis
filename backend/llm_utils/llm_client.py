@@ -161,10 +161,15 @@ def evaluate_content_with_llm(model: str, content: str, criteria_dict: Dict, cat
     top_criterion = max(criteria_results.items(), key=lambda x: int(x[1]['score']))[0]
     top_score = int(max(criteria_results.items(), key=lambda x: int(x[1]['score']))[1]['score'])/5*100
     
+    # 构建详细分数字典，只包含评估标准的分数
+    detailed_scores = {}
+    for criterion, score_data in criteria_results.items():
+        detailed_scores[criterion] = int(score_data['score'])
+    
     return {
         "criteria_result": result,
         "overall_score": total_score,
-        "detailed_scores": result,  # Add this for compatibility
+        "detailed_scores": detailed_scores,  # 只包含评估标准的分数
         "top_scoring_criterion": top_criterion,
         "top_score": top_score,
     }

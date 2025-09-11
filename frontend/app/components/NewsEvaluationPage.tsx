@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Play, Square, RefreshCw, TrendingUp, Newspaper, AlertCircle, CheckCircle, Settings } from 'lucide-react'
+import { Play, Square, RefreshCw, TrendingUp, Newspaper, AlertCircle, CheckCircle, Settings, PieChart } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Progress } from './ui/progress'
 import { Badge } from './ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { api, createNewsTaskStatusPoller } from '../services/api'
 import { NewsTaskResult, NewsEvaluationResult, TaskStatus } from '../types'
 import { useIsMobile } from '../hooks/use-mobile'
 import { AuthDialog } from './AuthDialog'
+import NewsEvaluationSunburst from './NewsEvaluationSunburst'
 
 export function NewsEvaluationPage() {
   const [currentTask, setCurrentTask] = useState<NewsTaskResult | null>(null)
@@ -18,6 +20,7 @@ export function NewsEvaluationPage() {
   const [stopPoller, setStopPoller] = useState<(() => void) | null>(null)
   const [showConfigDialog, setShowConfigDialog] = useState(false)
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [activeTab, setActiveTab] = useState('sunburst')
   
   const isMobile = useIsMobile()
 
@@ -127,13 +130,12 @@ export function NewsEvaluationPage() {
 
   return (
     <div className={`min-h-screen bg-background ${isMobile ? 'p-4 pb-20' : 'p-8'}`}>
+      
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Newspaper className="h-8 w-8 text-primary" />
           <div>
             <h1 className="text-2xl font-bold">新闻评估</h1>
-            <p className="text-muted-foreground">基于成交额Top币种的新闻内容进行AI评估</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -164,8 +166,8 @@ export function NewsEvaluationPage() {
             </div>
           </div>
 
-        {/* Current Task Status */}
-        {currentTask && (
+        {/* Current Task Status - Only show if not completed */}
+        {currentTask && currentTask.status !== 'completed' && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -188,7 +190,7 @@ export function NewsEvaluationPage() {
                 </div>
                 <div>
                   <span className="font-medium">状态:</span>
-                  <Badge variant={currentTask.status === 'completed' ? 'default' : 'secondary'} className="ml-2">
+                  <Badge variant={currentTask.status === 'running' ? 'default' : 'secondary'} className="ml-2">
                     {currentTask.status}
                   </Badge>
                 </div>
@@ -212,61 +214,89 @@ export function NewsEvaluationPage() {
 
         {/* Latest Results */}
         {latestResults?.result && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                最新评估结果
-              </CardTitle>
-              <CardDescription>
-                共评估 {latestResults.result.summary.total_symbols} 个币种，
-                {latestResults.result.summary.total_news} 条新闻，
-                平均评分: {latestResults.result.summary.average_score.toFixed(1)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4">
-                {latestResults.result.data.map((result: NewsEvaluationResult) => (
-                  <div key={result.symbol} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <h3 className="font-semibold text-lg">{result.base_coin}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {result.news_count} 条新闻
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className={`w-3 h-3 rounded-full ${getScoreColor(result.evaluation.overall_score)}`}
-                          />
-                          <span className="text-2xl font-bold">
-                            {result.evaluation.overall_score.toFixed(1)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          最高: {result.evaluation.top_scoring_criterion}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-3">
-                      <p className="text-sm text-muted-foreground">
-                        {result.news_summary}
-                      </p>
-                    </div>
-                    
-                    {result.error && (
-                      <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {result.error}
-                      </div>
-                    )}
+            <div>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="sunburst" className="flex items-center gap-2">
+                    <PieChart className="h-4 w-4" />
+                    旭日图
+                  </TabsTrigger>
+                  <TabsTrigger value="list" className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    列表视图
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="sunburst" className="mt-4">
+                  <div className="flex justify-center">
+                    <NewsEvaluationSunburst 
+                      data={latestResults.result.sunburst_data || null}
+                    />
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  {latestResults.result.sunburst_data && latestResults.result.sunburst_data.children && (
+                    <div className="mt-4 text-center text-sm text-muted-foreground">
+                      <p>旭日图展示了各评估维度下币种的得分分布</p>
+                      <div className="flex justify-center flex-wrap gap-3 mt-2 text-xs">
+                        {latestResults.result.sunburst_data.children.map((dimension, index) => {
+                          const colors = ['bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-red-500', 'bg-cyan-500', 'bg-lime-500', 'bg-orange-500', 'bg-pink-500', 'bg-gray-500'];
+                          const colorClass = colors[index % colors.length];
+                          
+                          return (
+                            <span key={dimension.name} className="flex items-center gap-1">
+                              <div className={`w-3 h-3 rounded-full ${colorClass}`}></div>
+                              {dimension.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="list" className="mt-4">
+                  <div className="grid gap-4">
+                    {latestResults.result.data.map((result: NewsEvaluationResult) => (
+                      <div key={result.symbol} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h3 className="font-semibold text-lg">{result.base_coin}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {result.news_count} 条新闻
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className={`w-3 h-3 rounded-full ${getScoreColor(result.evaluation.overall_score)}`}
+                              />
+                              <span className="text-2xl font-bold">
+                                {result.evaluation.overall_score.toFixed(1)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              最高: {result.evaluation.top_scoring_criterion}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-3">
+                          <p className="text-sm text-muted-foreground">
+                            {result.news_summary}
+                          </p>
+                        </div>
+                        
+                        {result.error && (
+                          <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {result.error}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
         )}
 
         {/* Configuration Dialog */}
