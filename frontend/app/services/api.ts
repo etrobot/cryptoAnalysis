@@ -1,7 +1,6 @@
 import { TaskResult, RunResponse, FactorListResponse, NewsTaskResult } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.PROD ? '' : 'http://localhost:14250')
+const API_BASE_URL: string = 'http://localhost:14250'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

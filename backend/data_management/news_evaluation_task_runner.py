@@ -199,10 +199,14 @@ def run_news_evaluation_task(
             key=lambda x: x["evaluation"]["overall_score"], reverse=True
         )
 
+        # 生成旭日图数据
+        sunburst_data = _generate_sunburst_data(evaluation_results)
+
         # 构建最终结果
         result = {
             "data": evaluation_results,
             "count": len(evaluation_results),
+            "sunburst_data": sunburst_data,  # 新增旭日图数据
             "summary": {
                 "total_symbols": len(symbols_to_process),
                 "total_news": total_news,
@@ -276,4 +280,82 @@ def _news_item_to_dict(news_item: NewsItem) -> Dict[str, Any]:
         "published_at": news_item.published_at,
         "source": news_item.source,
         "symbol": news_item.symbol,
+    }
+
+
+def _generate_sunburst_data(evaluation_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    生成旭日图数据结构
+    
+    结构：
+    - 根节点：加密货币评估
+      - 评分等级分组（优秀、良好、一般、较差）
+        - 具体币种
+          - 评估维度
+    """
+    if not evaluation_results:
+        return {"name": "加密货币评估", "children": []}
+    
+    # 定义评分等级
+    def get_score_level(score: float) -> str:
+        if score >= 80:
+            return "优秀 (80+)"
+        elif score >= 60:
+            return "良好 (60-79)"
+        elif score >= 40:
+            return "一般 (40-59)"
+        else:
+            return "较差 (<40)"
+    
+    # 按评分等级分组
+    score_groups = {}
+    for result in evaluation_results:
+        overall_score = result["evaluation"]["overall_score"]
+        level = get_score_level(overall_score)
+        
+        if level not in score_groups:
+            score_groups[level] = []
+        score_groups[level].append(result)
+    
+    # 构建旭日图数据
+    children = []
+    for level, results in score_groups.items():
+        level_children = []
+        
+        for result in results:
+            symbol = result["base_coin"]
+            evaluation = result["evaluation"]
+            
+            # 为每个币种创建评估维度的子节点
+            dimension_children = []
+            detailed_scores = evaluation.get("detailed_scores", {})
+            
+            for dimension, score in detailed_scores.items():
+                if isinstance(score, (int, float)) and score > 0:
+                    dimension_children.append({
+                        "name": dimension,
+                        "value": round(score, 1)
+                    })
+            
+            # 如果没有详细分数，使用总分
+            if not dimension_children:
+                dimension_children.append({
+                    "name": "总评分",
+                    "value": round(evaluation["overall_score"], 1)
+                })
+            
+            level_children.append({
+                "name": symbol,
+                "value": round(evaluation["overall_score"], 1),
+                "children": dimension_children
+            })
+        
+        children.append({
+            "name": level,
+            "children": level_children
+        })
+    
+    return {
+        "name": "加密货币评估",
+        "children": children
     }
