@@ -9,7 +9,7 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 # Check for proxy configuration
-proxy_url = os.getenv('PROXY')
+proxy_url = os.getenv('HTTP_PROXY')
 if proxy_url:
     logger.info(f"Using proxy: {proxy_url}")
     PROXIES = {'http': proxy_url, 'https': proxy_url}

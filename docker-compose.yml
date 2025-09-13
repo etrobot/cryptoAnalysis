@@ -10,6 +10,8 @@ services:
     environment:
       - DATABASE_PATH=/app/data/crypto_data.db
       - FREQTRADE_API_URL=http://freqtrade-bot:8080
+      # Proxy settings for restricted countries (configured by deploy.sh)
+      - HTTP_PROXY=${PROXY_URL:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.crypto-trader.rule=Host(`btc.subx.fun`)"
@@ -32,6 +34,10 @@ services:
       - FREQTRADE__API_SERVER__ENABLED=true
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
       - FREQTRADE__API_SERVER__LISTEN_PORT=8080
+      # Proxy settings for restricted countries (configured by deploy.sh)
+      - HTTP_PROXY=${PROXY_URL:-}
+      - HTTPS_PROXY=${PROXY_URL:-}
+      - NO_PROXY=localhost,127.0.0.1
     ports:
       - "6677:8080"
     labels:

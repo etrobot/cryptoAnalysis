@@ -91,6 +91,44 @@ else
   fi
 fi
 
+# Get proxy configuration
+echo ""
+info "🌐 Proxy Configuration (for restricted countries)"
+read -p "Do you need to use a proxy for Freqtrade? (y/N): " USE_PROXY
+
+PROXY_URL=""
+if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
+    read -p "Enter proxy URL (format: http://username:password@proxy.server:port): " PROXY_URL
+    if [ -n "$PROXY_URL" ]; then
+        info "🔧 Configuring proxy settings..."
+        
+        # Update docker-compose.yml with proxy settings
+        if [ -f "docker-compose.yml" ]; then
+            # Check if proxy environment variables already exist
+            if grep -q "HTTP_PROXY=" docker-compose.yml; then
+                # Update existing proxy settings
+                sed -i.bak "s|HTTP_PROXY=.*|HTTP_PROXY=${PROXY_URL}|g" docker-compose.yml
+                sed -i.bak "s|HTTPS_PROXY=.*|HTTPS_PROXY=${PROXY_URL}|g" docker-compose.yml
+                success "✅ Updated existing proxy settings in docker-compose.yml"
+            else
+                # Add proxy settings to freqtrade service environment
+                sed -i.bak '/FREQTRADE__API_SERVER__LISTEN_PORT=8080/a\
+      # Proxy settings for restricted countries\
+      - HTTP_PROXY='"${PROXY_URL}"'\
+      - HTTPS_PROXY='"${PROXY_URL}"'\
+      - NO_PROXY=localhost,127.0.0.1' docker-compose.yml
+                success "✅ Added proxy settings to docker-compose.yml"
+            fi
+            rm -f docker-compose.yml.bak
+        fi
+        success "✅ Proxy configured: ${PROXY_URL}"
+    else
+        warn "⚠️  No proxy URL provided, skipping proxy configuration"
+    fi
+else
+    info "ℹ️  No proxy configured"
+fi
+
 # Get OpenAI API credentials
 echo ""
 info "🤖 OpenAI API Configuration"
@@ -115,6 +153,9 @@ FREQTRADE_API_USERNAME=${FREQTRADE_USERNAME}
 FREQTRADE_API_PASSWORD=${FREQTRADE_PASSWORD}
 FREQTRADE_API_TOKEN=${WS_TOKEN}
 FREQTRADE_API_TIMEOUT=15
+
+# Proxy Configuration
+PROXY_URL=${PROXY_URL}
 
 # Security
 JWT_SECRET_KEY=${JWT_SECRET}
