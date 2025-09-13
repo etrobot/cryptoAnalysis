@@ -121,6 +121,23 @@ if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
             fi
             rm -f docker-compose.yml.bak
         fi
+        
+        # Update Freqtrade config with proxy settings
+        if [ -f "user_data/config_external_signals.json" ] && command_exists jq; then
+            info "🔧 Adding proxy settings to Freqtrade config..."
+            jq --arg proxy_url "$PROXY_URL" \
+               '.exchange.ccxt_config.proxies = {
+                  "http": $proxy_url,
+                  "https": $proxy_url
+                } | 
+                .exchange.ccxt_async_config.proxies = {
+                  "http": $proxy_url,
+                  "https": $proxy_url
+                }' \
+               user_data/config_external_signals.json > user_data/config_temp.json && \
+            mv user_data/config_temp.json user_data/config_external_signals.json
+            success "✅ Added proxy settings to Freqtrade config"
+        fi
         success "✅ Proxy configured: ${PROXY_URL}"
     else
         warn "⚠️  No proxy URL provided, skipping proxy configuration"
