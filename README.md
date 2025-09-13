@@ -1,13 +1,43 @@
-# PNPM + UV Demo Project
+# 🚀 Crypto Trading Analysis Dashboard
 
-This is a monorepo demonstrating a fullstack application using pnpm for package management and UV for Python dependency management.
+An intelligent crypto trading analysis platform with automated factor analysis, news evaluation, and integrated FreqTrade support.
 
-## Project Structure
+## ✨ Features
 
-- `backend/`: Python backend using FastAPI and Uvicorn, with UV for dependency management.
-- `frontend/`: React frontend using Vite and pnpm for dependency management.
+- 📊 **Comprehensive Market Analysis** - Multi-factor technical analysis
+- 🤖 **AI-Powered Insights** - LLM-driven news and market evaluation  
+- 💹 **Integrated Trading** - FreqTrade + FreqUI for automated trading
+- 🛡️ **Security First** - Auto-generated credentials and dry-run safety
+- 📱 **Modern Interface** - Responsive React dashboard with real-time updates
+- 🐳 **Docker Ready** - One-command deployment
 
-## Getting Started
+## 🎯 Quick Start
+
+**Choose your preferred setup workflow:**
+
+### Option 1: Set API Key First (Recommended)
+```bash
+# 1. Configure OpenAI API key
+./update_openai_credentials.sh
+
+# 2. Deploy everything
+./deploy.sh
+
+# 3. Access dashboard: http://localhost:14250
+```
+
+### Option 2: Deploy and Configure Later
+```bash
+# 1. Deploy with demo settings (safe!)
+./deploy.sh
+
+# 2. Configure when ready
+./update_openai_credentials.sh
+```
+
+📖 **See [QUICK_START.md](QUICK_START.md) for detailed setup options**
+
+## 🏗️ Project Structure
 
 ### Prerequisites
 

@@ -296,6 +296,31 @@ def login(request: AuthRequest) -> AuthResponse:
     return login_user(request)
 
 
+# FreqTrade API routes
+@app.get("/api/freqtrade/credentials")
+def get_freqtrade_credentials():
+    """Get Freqtrade API credentials configuration"""
+    return api.get_freqtrade_credentials()
+
+
+@app.get("/api/freqtrade/test")
+def test_freqtrade_connection():
+    """Test Freqtrade API connection and credentials"""
+    return api.test_freqtrade_connection()
+
+
+@app.get("/api/freqtrade/health")
+def get_freqtrade_health():
+    """Check Freqtrade API health status"""
+    return api.get_freqtrade_health()
+
+
+@app.post("/api/freqtrade/refresh-token")
+def refresh_freqtrade_token():
+    """Force refresh Freqtrade API token"""
+    return api.refresh_freqtrade_token()
+
+
 # Serve frontend for production
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):

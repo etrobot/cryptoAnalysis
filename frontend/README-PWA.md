@@ -36,7 +36,7 @@
 1. **Generate Real Icons**: Replace placeholder icons with actual app icons
 2. **Enhanced Caching**: Add API response caching strategies
 3. **Offline Fallbacks**: Create offline pages for when network is unavailable
-4. **Push Notifications**: Add support for stock alerts
+4. **Push Notifications**: Add support for Crypto alerts
 5. **Background Sync**: Queue actions when offline
 
 ## Testing PWA

@@ -148,59 +148,21 @@ export function SchedulerStatus() {
     <Card className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <Clock className="h-5 w-5" />
-          <h3 className="text-lg font-semibold">定时任务调度器</h3>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Badge variant={status.scheduler_running ? "default" : "secondary"}>
-            {status.scheduler_running ? '运行中' : '已停止'}
-          </Badge>
-          
+          <span className="text-sm font-medium">{status.enabled ? '调度器已启用' : '调度器已禁用'}</span>
           <Button
-            variant="outline"
             size="sm"
             onClick={toggleScheduler}
             disabled={toggling}
-            className="flex items-center space-x-1"
+            className="flex items-center"
           >
-            <Settings className="h-4 w-4" />
             <span>{toggling ? '切换中...' : (status.enabled ? '禁用' : '启用')}</span>
           </Button>
+          <div className="text-sm font-medium">当前阶段:  {phaseDisplay.text} 上次运行: {formatDateTime(status.last_run)}</div>
+
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">调度状态:</span>
-            <Badge variant={status.enabled ? "default" : "secondary"}>
-              {status.enabled ? '已启用' : '已禁用'}
-            </Badge>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">当前阶段:</span>
-            <Badge className={phaseDisplay.color}>
-              {phaseDisplay.text}
-            </Badge>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">上次运行:</span>
-            <span className="text-sm text-gray-600">
-              {formatDateTime(status.last_run)}
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">下次运行:</span>
-            <span className="text-sm text-gray-600">
-              {formatDateTime(status.next_run)}
-            </span>
-          </div>
-        </div>
-
+      <div className="flex gap-6">
         <div className="space-y-2">
           {status.current_analysis_task && (
             <div className="space-y-1">
@@ -269,12 +231,6 @@ export function SchedulerStatus() {
           </Button>
         </div>
       )}
-
-      <div className="text-xs text-gray-500 border-t pt-2">
-        <p>• 定时任务每天UTC 0:00自动运行</p>
-        <p>• 依次执行：分析任务 → 新闻评估任务</p>
-        <p>• 可随时手动停止正在运行的任务</p>
-      </div>
     </Card>
   )
 }

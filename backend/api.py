@@ -17,6 +17,7 @@ from models import (
 from sqlmodel import select
 from utils import get_task, get_all_tasks, get_last_completed_task, TASK_STOP_EVENTS
 from data_management.services import create_analysis_task, create_news_evaluation_task
+from freqtrade_client import get_api_credentials, test_credentials, health as freqtrade_health, refresh_token
 
 
 def read_root():
@@ -330,3 +331,35 @@ def get_latest_results_universal() -> TaskResult | NewsTaskResult | Message:
             extended=last_task.result.get("extended") if last_task.result else None,
             error=last_task.error,
         )
+
+
+def get_freqtrade_credentials():
+    """Get Freqtrade API credentials configuration (without sensitive data)."""
+    return get_api_credentials()
+
+
+def test_freqtrade_connection():
+    """Test Freqtrade API connection and credentials."""
+    return test_credentials()
+
+
+def get_freqtrade_health():
+    """Check Freqtrade API health status."""
+    try:
+        is_healthy = freqtrade_health()
+        return {"healthy": is_healthy, "status": "connected" if is_healthy else "disconnected"}
+    except Exception as e:
+        return {"healthy": False, "status": "error", "error": str(e)}
+
+
+def refresh_freqtrade_token():
+    """Force refresh Freqtrade API token."""
+    try:
+        token = refresh_token()
+        return {
+            "success": bool(token),
+            "message": "Token refreshed successfully" if token else "Failed to refresh token",
+            "token_length": len(token) if token else 0
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Error refreshing token: {str(e)}"}

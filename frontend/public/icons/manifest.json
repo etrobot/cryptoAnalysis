@@ -1,11 +1,11 @@
 {
-  "name": "Stock Market Analysis",
-  "short_name": "StockAnalysis",
-  "description": "Professional stock market analysis application",
+  "name": "Crypto Market Analysis",
+  "short_name": "CryptoAnalysis",
+  "description": "Professional Crypto market analysis application",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#14b8a6",
+  "theme_color": "#2563eb",
   "icons": [
     {
       "src": "icons/icon-16x16.png",

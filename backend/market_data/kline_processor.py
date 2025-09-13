@@ -13,12 +13,12 @@ logger = logging.getLogger(__name__)
 # These functions may not be used in the current implementation
 
 
-def calculate_and_save_weekly_data(stock_codes: List[str], task_id: str = None):
+def calculate_and_save_weekly_data(Crypto_codes: List[str], task_id: str = None):
     """从日K数据计算并保存周K数据"""
     total_saved = 0
 
     with Session(engine) as session:
-        for code in stock_codes:
+        for code in Crypto_codes:
             # 获取该Crypto的所有日K数据
             stmt = (
                 select(DailyMarketData)
@@ -115,12 +115,12 @@ def calculate_and_save_weekly_data(stock_codes: List[str], task_id: str = None):
     return total_saved
 
 
-def calculate_and_save_monthly_data(stock_codes: List[str], task_id: str = None):
+def calculate_and_save_monthly_data(Crypto_codes: List[str], task_id: str = None):
     """从日K数据计算并保存月K数据"""
     total_saved = 0
 
     with Session(engine) as session:
-        for code in stock_codes:
+        for code in Crypto_codes:
             # 获取该Crypto的所有日K数据
             stmt = (
                 select(DailyMarketData)
@@ -217,12 +217,12 @@ def calculate_and_save_monthly_data(stock_codes: List[str], task_id: str = None)
     return total_saved
 
 
-def get_weekly_data(stock_codes: List[str], limit: int = None) -> pd.DataFrame:
+def get_weekly_data(Crypto_codes: List[str], limit: int = None) -> pd.DataFrame:
     """获取周K线数据"""
     weekly_data = []
 
     with Session(engine) as session:
-        for code in stock_codes:
+        for code in Crypto_codes:
             stmt = (
                 select(WeeklyMarketData)
                 .where(WeeklyMarketData.code == code)
@@ -251,12 +251,12 @@ def get_weekly_data(stock_codes: List[str], limit: int = None) -> pd.DataFrame:
     return pd.DataFrame(weekly_data)
 
 
-def get_monthly_data(stock_codes: List[str], limit: int = None) -> pd.DataFrame:
+def get_monthly_data(Crypto_codes: List[str], limit: int = None) -> pd.DataFrame:
     """获取月K线数据"""
     monthly_data = []
 
     with Session(engine) as session:
-        for code in stock_codes:
+        for code in Crypto_codes:
             stmt = (
                 select(MonthlyMarketData)
                 .where(MonthlyMarketData.code == code)

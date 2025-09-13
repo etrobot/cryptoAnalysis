@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from data_management.services import create_analysis_task, create_news_evaluation_task
+from trade_signal_executor import execute_signals
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,23 @@ class TaskScheduler:
             # 等待新闻任务完成
             self._wait_for_task_completion(news_task_id, "News evaluation")
             
+            # 第三阶段：根据分析结果生成交易信号并发送至 Freqtrade（模拟交易）
+            try:
+                from freqtrade_client import list_open_trades
+                from signal_generator import generate_buy_sell_signals_from_latest
+
+                token = None  # obtain_token() 会在 executor 内部调用，这里只读 open_trades
+                open_trades = list_open_trades(token)
+                held_pairs = sorted({t.get("pair") for t in open_trades if t.get("pair")})
+
+                signals = generate_buy_sell_signals_from_latest(top_n=5, current_open_positions=held_pairs)
+                batch = signals.get("sell", []) + signals.get("buy", [])
+                # 模拟交易：dry_run=True
+                result = execute_signals(batch, dry_run=True)
+                logger.info(f"Trade signals executed: {result}")
+            except Exception as e:
+                logger.error(f"Trade signal execution failed: {e}")
+
             logger.info("Daily scheduled tasks completed successfully")
             
         except Exception as e:

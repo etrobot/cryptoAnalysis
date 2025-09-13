@@ -18,15 +18,15 @@
    ```
 
 2. **访问应用**
-   - 本地测试: http://localhost:61125
-   - 本地API文档: http://localhost:61125/docs
+   - 本地测试: http://localhost:14250
+   - 本地API文档: http://localhost:14250/docs
    - 生产环境: https://btc.subx.fun
 
 ## 配置说明
 
 ### Docker配置
 - **单容器部署**: 前端构建后集成到后端静态文件服务
-- **数据持久化**: `./data/stock_data.db` 映射到容器内数据库
+- **数据持久化**: `./data/crypto_data.db` 映射到容器内数据库
 - **端口**: 容器内8000端口
 
 ### Traefik Labels
@@ -63,7 +63,7 @@ docker-compose exec app bash
 
 ```bash
 # 备份数据库
-cp data/stock_data.db backups/stock_data_$(date +%Y%m%d).db
+cp data/crypto_data.db backups/crypto_data_$(date +%Y%m%d).db
 ```
 
 ## 故障排除
@@ -86,5 +86,5 @@ docker network ls | grep traefik
 ls -la data/
 
 # 检查数据库文件
-sqlite3 data/stock_data.db ".tables"
+sqlite3 data/crypto_data.db ".tables"
 ```
