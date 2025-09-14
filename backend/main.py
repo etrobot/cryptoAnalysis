@@ -39,6 +39,10 @@ from api import (
     get_task_status_universal,
     stop_task_universal,
     get_latest_results_universal,
+    get_scheduler_status_api,
+    stop_scheduled_tasks,
+    set_scheduler_enabled,
+    get_timeframe_analysis,
 )
 from utils import get_task, TASK_VERSIONS
 from factors import list_factors
@@ -319,6 +323,30 @@ def get_freqtrade_health():
 def refresh_freqtrade_token():
     """Force refresh Freqtrade API token"""
     return api.refresh_freqtrade_token()
+
+
+@app.get("/api/scheduler/status")
+def get_scheduler_status():
+    """Get scheduler status and current tasks"""
+    return get_scheduler_status_api()
+
+
+@app.post("/api/scheduler/stop")
+def stop_scheduler_tasks():
+    """Stop currently running scheduled tasks"""
+    return stop_scheduled_tasks()
+
+
+@app.post("/api/scheduler/enable")
+def enable_scheduler(enabled: bool = True):
+    """Enable or disable scheduled tasks"""
+    return set_scheduler_enabled(enabled)
+
+
+@app.get("/api/timeframe-analysis")
+def get_timeframe_analysis_route():
+    """Get the latest timeframe analysis results"""
+    return get_timeframe_analysis()
 
 
 # Serve frontend for production

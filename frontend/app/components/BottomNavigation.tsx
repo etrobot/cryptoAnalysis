@@ -1,6 +1,6 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, TrendingUp, Newspaper } from 'lucide-react'
+import { Home, TrendingUp, Newspaper, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -24,6 +24,11 @@ const navItems: NavItem[] = [
     path: '/news-evaluation',
     label: '新闻评估',
     icon: Newspaper
+  },
+  {
+    path: '/scheduler',
+    label: '定时任务',
+    icon: Clock
   }
 ]
 

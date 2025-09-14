@@ -10,29 +10,13 @@
   "tradable_balance_ratio": 0.99,
   "fiat_display_currency": "USD",
   "exchange": {
-    "name": "bybit",
-    "key": "DEMO_API_KEY_FOR_DRY_RUN",
-    "secret": "DEMO_SECRET_FOR_DRY_RUN",
-    "ccxt_config": {
-      "enableRateLimit": true,
-      "sandbox": false,
-      "options": {
-        "defaultType": "spot"
-      }
-    },
-    "ccxt_async_config": {
-      "enableRateLimit": true,
-      "sandbox": false,
-      "options": {
-        "defaultType": "spot"
-      }
-    },
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
     "pair_whitelist": [],
-    "pair_blacklist": [
-      ".*/_.*",
-      ".*/BTC",
-      ".*/ETH"
-    ]
+    "pair_blacklist": []
   },
   "pairlists": [
     {

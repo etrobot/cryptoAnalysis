@@ -18,6 +18,7 @@ from sqlmodel import select
 from utils import get_task, get_all_tasks, get_last_completed_task, TASK_STOP_EVENTS
 from data_management.services import create_analysis_task, create_news_evaluation_task
 from freqtrade_client import get_api_credentials, test_credentials, health as freqtrade_health, refresh_token
+from scheduler import get_scheduler_status, stop_current_scheduled_task, enable_scheduled_tasks
 
 
 def read_root():
@@ -363,3 +364,65 @@ def refresh_freqtrade_token():
         }
     except Exception as e:
         return {"success": False, "message": f"Error refreshing token: {str(e)}"}
+
+
+def get_scheduler_status_api():
+    """Get scheduler status and current tasks."""
+    return get_scheduler_status()
+
+
+def stop_scheduled_tasks():
+    """Stop currently running scheduled tasks."""
+    try:
+        stopped = stop_current_scheduled_task()
+        return {
+            "success": True,
+            "message": "Tasks stopped successfully" if stopped else "No tasks were running",
+            "stopped": stopped
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Error stopping tasks: {str(e)}"}
+
+
+def set_scheduler_enabled(enabled: bool):
+    """Enable or disable scheduled tasks."""
+    try:
+        enable_scheduled_tasks(enabled)
+        return {
+            "success": True,
+            "message": f"Scheduled tasks {'enabled' if enabled else 'disabled'}",
+            "enabled": enabled
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Error updating scheduler: {str(e)}"}
+
+
+def get_timeframe_analysis():
+    """Get the latest timeframe analysis results."""
+    import json
+    import os
+    from datetime import datetime
+    
+    try:
+        analysis_file = "debug_output/timeframe_analysis.json"
+        
+        if not os.path.exists(analysis_file):
+            return {
+                "message": "No timeframe analysis available yet. Analysis runs daily at UTC 1:00.",
+                "next_analysis": "Daily at 01:00 UTC"
+            }
+        
+        with open(analysis_file, "r", encoding="utf-8") as f:
+            analysis_data = json.load(f)
+        
+        # 添加文件修改时间
+        file_mtime = os.path.getmtime(analysis_file)
+        analysis_data["file_updated"] = datetime.fromtimestamp(file_mtime).isoformat()
+        
+        return analysis_data
+        
+    except Exception as e:
+        return {
+            "error": f"Failed to load timeframe analysis: {str(e)}",
+            "message": "Error reading analysis file"
+        }

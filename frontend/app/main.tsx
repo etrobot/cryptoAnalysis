@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { DashboardPage } from './components/DashboardPage'
 import { NewsEvaluationPage } from './components/NewsEvaluationPage'
+import { SchedulerPage } from './components/SchedulerPage'
 import { BottomNavigation } from './components/BottomNavigation'
 import { SideNavigation } from './components/SideNavigation'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
@@ -45,6 +46,7 @@ function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/analysis" element={<DashboardPage />} />
               <Route path="/news-evaluation" element={<NewsEvaluationPage />} />
+              <Route path="/scheduler" element={<SchedulerPage />} />
             </Routes>
           </div>
           <BottomNavigation />
