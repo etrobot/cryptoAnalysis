@@ -157,9 +157,37 @@ if [ -z "$OPENAI_BASE_URL" ]; then
     OPENAI_BASE_URL="https://api.openai.com/v1"
 fi
 
-info "📝 Creating .env file with API credentials..."
-
-cat > .env << EOF
+# Check if .env file already exists
+if [ -f ".env" ]; then
+    echo ""
+    warn "⚠️  .env file already exists!"
+    echo ""
+    info "Current .env file contains:"
+    echo "----------------------------------------"
+    cat .env | head -10
+    if [ $(wc -l < .env) -gt 10 ]; then
+        echo "... (showing first 10 lines only)"
+    fi
+    echo "----------------------------------------"
+    echo ""
+    
+    read -p "Do you want to overwrite the existing .env file? (y/N): " OVERWRITE_ENV
+    
+    if [[ ! "$OVERWRITE_ENV" =~ ^[Yy]$ ]]; then
+        info "ℹ️  Keeping existing .env file. Deployment will continue with current settings."
+        echo ""
+        info "📝 If you need to update credentials later, you can:"
+        echo "  - Run this script again and choose to overwrite"
+        echo "  - Use ./update_openai_credentials.sh for OpenAI API key"
+        echo "  - Edit .env file manually"
+        echo ""
+    else
+        info "💾 Backing up existing .env file..."
+        cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+        success "✅ Backup created: .env.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        info "📝 Creating new .env file with API credentials..."
+        cat > .env << EOF
 # OpenAI API Configuration
 OPENAI_API_KEY=${OPENAI_KEY}
 OPENAI_BASE_URL=${OPENAI_BASE_URL}
@@ -178,10 +206,33 @@ PROXY_URL=${PROXY_URL}
 JWT_SECRET_KEY=${JWT_SECRET}
 WS_TOKEN=${WS_TOKEN}
 EOF
+        success "✅ OpenAI API key configured"
+        success "✅ Created new .env file with secure credentials"
+    fi
+else
+    info "📝 Creating .env file with API credentials..."
+    cat > .env << EOF
+# OpenAI API Configuration
+OPENAI_API_KEY=${OPENAI_KEY}
+OPENAI_BASE_URL=${OPENAI_BASE_URL}
 
-success "✅ OpenAI API key configured"
+# Freqtrade API Configuration
+FREQTRADE_API_URL=http://freqtrade-bot:8080
+FREQTRADE_API_USERNAME=${FREQTRADE_USERNAME}
+FREQTRADE_API_PASSWORD=${FREQTRADE_PASSWORD}
+FREQTRADE_API_TOKEN=${WS_TOKEN}
+FREQTRADE_API_TIMEOUT=15
 
-success "✅ Created .env file with secure credentials"
+# Proxy Configuration
+PROXY_URL=${PROXY_URL}
+
+# Security
+JWT_SECRET_KEY=${JWT_SECRET}
+WS_TOKEN=${WS_TOKEN}
+EOF
+    success "✅ OpenAI API key configured"
+    success "✅ Created .env file with secure credentials"
+fi
 
 # Backup existing database if it exists
 backup_database() {
