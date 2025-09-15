@@ -310,3 +310,8 @@ cython_debug/
 
 /backend/static/
 backend/debug_output/
+data/
+user_data/config_external_signals.json.backup.*
+user_data/config_external_signals.json
+user_data/config_okx.json
+user_data/config_bybit.json

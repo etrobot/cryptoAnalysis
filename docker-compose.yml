@@ -11,7 +11,7 @@ services:
       - DATABASE_PATH=/app/data/crypto_data.db
       - FREQTRADE_API_URL=http://freqtrade-bot:8080
       # Proxy settings for restricted countries (configured by deploy.sh)
-      - HTTP_PROXY=${PROXY_URL:-}
+      - HTTP_PROXY=http://127.0.0.1:7890
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.crypto-trader.rule=Host(`btc.subx.fun`)"
@@ -28,16 +28,15 @@ services:
     volumes:
       - ./user_data:/freqtrade/user_data
     command: >
-      trade --config /freqtrade/user_data/config_okx.json
+      trade --config /freqtrade/user_data/config_external_signals.json
             --strategy ExternalSignalStrategy
-            --dry-run
     environment:
       - FREQTRADE__API_SERVER__ENABLED=true
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
       - FREQTRADE__API_SERVER__LISTEN_PORT=8080
       # Proxy settings for restricted countries (configured by deploy.sh)
-      - HTTP_PROXY=${PROXY_URL:-}
-      - HTTPS_PROXY=${PROXY_URL:-}
+      - HTTP_PROXY=http://127.0.0.1:7890
+      - HTTPS_PROXY=http://127.0.0.1:7890
       - NO_PROXY=localhost,127.0.0.1
     ports:
       - "6677:8080"
@@ -45,10 +44,8 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.freqtrade.rule=Host(`freq.subx.fun`)"
       - "traefik.http.routers.freqtrade.entrypoints=websecure"
-      - "traefik.http.routers.freqtrade.tls=true"
       - "traefik.http.routers.freqtrade.tls.certresolver=letsencrypt"
       - "traefik.http.services.freqtrade.loadbalancer.server.port=8080"
-      - "traefik.http.routers.freqtrade.middlewares=secure-headers@file"
     networks:
       - traefik
 
