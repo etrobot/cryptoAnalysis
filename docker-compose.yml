@@ -28,8 +28,9 @@ services:
     volumes:
       - ./user_data:/freqtrade/user_data
     command: >
-      trade --config /freqtrade/user_data/config_external_signals.json
+      trade --config /freqtrade/user_data/config_okx.json
             --strategy ExternalSignalStrategy
+            --dry-run
     environment:
       - FREQTRADE__API_SERVER__ENABLED=true
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
