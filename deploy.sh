@@ -91,125 +91,133 @@ else
   fi
 fi
 
-# Get proxy configuration
-echo ""
-info "🌐 Proxy Configuration (for restricted countries)"
-read -p "Do you need to use a proxy for Freqtrade? (y/N): " USE_PROXY
-
-PROXY_URL=""
-if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
-    read -p "Enter proxy URL (format: http://username:password@proxy.server:port): " PROXY_URL
-    if [ -n "$PROXY_URL" ]; then
-        info "🔧 Configuring proxy settings..."
-        
-        # Update docker-compose.yml with proxy settings
-        if [ -f "docker-compose.yml" ]; then
-            # Check if proxy environment variables already exist
-            if grep -q "HTTP_PROXY=" docker-compose.yml; then
-                # Update existing proxy settings
-                sed -i.bak "s|HTTP_PROXY=.*|HTTP_PROXY=${PROXY_URL}|g" docker-compose.yml
-                sed -i.bak "s|HTTPS_PROXY=.*|HTTPS_PROXY=${PROXY_URL}|g" docker-compose.yml
-                success "✅ Updated existing proxy settings in docker-compose.yml"
-            else
-                # Add proxy settings to freqtrade service environment
-                sed -i.bak '/FREQTRADE__API_SERVER__LISTEN_PORT=8080/a\
-      # Proxy settings for restricted countries\
-      - HTTP_PROXY='"${PROXY_URL}"'\
-      - HTTPS_PROXY='"${PROXY_URL}"'\
-      - NO_PROXY=localhost,127.0.0.1' docker-compose.yml
-                success "✅ Added proxy settings to docker-compose.yml"
-            fi
-            rm -f docker-compose.yml.bak
-        fi
-        
-        # Update Freqtrade config with proxy settings
-        if [ -f "user_data/config_external_signals.json" ] && command_exists jq; then
-            info "🔧 Adding proxy settings to Freqtrade config..."
-            jq --arg proxy_url "$PROXY_URL" \
-               '.exchange.ccxt_config.proxies = {
-                  "http": $proxy_url,
-                  "https": $proxy_url
-                } | 
-                .exchange.ccxt_async_config.proxies = {
-                  "http": $proxy_url,
-                  "https": $proxy_url
-                }' \
-               user_data/config_external_signals.json > user_data/config_temp.json && \
-            mv user_data/config_temp.json user_data/config_external_signals.json
-            success "✅ Added proxy settings to Freqtrade config"
-        fi
-        success "✅ Proxy configured: ${PROXY_URL}"
-    else
-        warn "⚠️  No proxy URL provided, skipping proxy configuration"
-    fi
-else
-    info "ℹ️  No proxy configured"
-fi
-
-# Get OpenAI API credentials
-echo ""
-info "🤖 OpenAI API Configuration"
-read -p "Enter your OpenAI API Key: " OPENAI_KEY
-read -p "Enter OpenAI Base URL (default: https://api.openai.com/v1): " OPENAI_BASE_URL
-
-# Use default if empty
-if [ -z "$OPENAI_BASE_URL" ]; then
-    OPENAI_BASE_URL="https://api.openai.com/v1"
-fi
-
-# Check if .env file already exists
+# Check if .env file already exists first
 if [ -f ".env" ]; then
     echo ""
     warn "⚠️  .env file already exists!"
     echo ""
     info "Current .env file contains:"
-    echo "----------------------------------------"
-    cat .env | head -10
-    if [ $(wc -l < .env) -gt 10 ]; then
-        echo "... (showing first 10 lines only)"
-    fi
-    echo "----------------------------------------"
+    echo "========================================"
+    cat .env
+    echo "========================================"
     echo ""
     
-    read -p "Do you want to overwrite the existing .env file? (y/N): " OVERWRITE_ENV
+    read -p "Do you want to recreate the .env file with new credentials? (y/N): " RECREATE_ENV
     
-    if [[ ! "$OVERWRITE_ENV" =~ ^[Yy]$ ]]; then
+    if [[ ! "$RECREATE_ENV" =~ ^[Yy]$ ]]; then
         info "ℹ️  Keeping existing .env file. Deployment will continue with current settings."
         echo ""
         info "📝 If you need to update credentials later, you can:"
-        echo "  - Run this script again and choose to overwrite"
+        echo "  - Run this script again and choose to recreate"
         echo "  - Use ./update_openai_credentials.sh for OpenAI API key"
         echo "  - Edit .env file manually"
         echo ""
+        
+        # Skip credential input if keeping existing .env
+        SKIP_ENV_CREATION=true
     else
         info "💾 Backing up existing .env file..."
         cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
         success "✅ Backup created: .env.backup.$(date +%Y%m%d_%H%M%S)"
-        
-        info "📝 Creating new .env file with API credentials..."
-        cat > .env << EOF
-# OpenAI API Configuration
-OPENAI_API_KEY=${OPENAI_KEY}
-OPENAI_BASE_URL=${OPENAI_BASE_URL}
-
-# Freqtrade API Configuration
-FREQTRADE_API_URL=http://freqtrade-bot:8080
-FREQTRADE_API_USERNAME=${FREQTRADE_USERNAME}
-FREQTRADE_API_PASSWORD=${FREQTRADE_PASSWORD}
-FREQTRADE_API_TOKEN=${WS_TOKEN}
-FREQTRADE_API_TIMEOUT=15
-
-# Proxy Configuration
-PROXY_URL=${PROXY_URL}
-
-# Security
-JWT_SECRET_KEY=${JWT_SECRET}
-WS_TOKEN=${WS_TOKEN}
-EOF
-        success "✅ OpenAI API key configured"
-        success "✅ Created new .env file with secure credentials"
+        echo ""
+        info "📋 You can copy any values you want to keep from above and paste them when prompted."
+        echo ""
+        SKIP_ENV_CREATION=false
     fi
 else
+    SKIP_ENV_CREATION=false
+fi
+
+# Get configuration only if we need to create/update .env
+if [ "$SKIP_ENV_CREATION" != "true" ]; then
+    # Ask if user wants to use existing generated credentials
+    echo ""
+    info "🔑 Generated Credentials Configuration"
+    info "The following secure credentials were auto-generated:"
+    echo "  - Freqtrade Username: ${FREQTRADE_USERNAME}"
+    echo "  - Freqtrade Password: ${FREQTRADE_PASSWORD}"
+    echo "  - JWT Secret: ${JWT_SECRET:0:10}..."
+    echo "  - WebSocket Token: ${WS_TOKEN:0:10}..."
+    echo ""
+    read -p "Do you want to use these newly generated credentials? (Y/n): " USE_NEW_CREDS
+    
+    if [[ "$USE_NEW_CREDS" =~ ^[Nn]$ ]]; then
+        echo ""
+        info "📋 Please enter your preferred credentials (or copy from the .env backup shown above):"
+        read -p "Freqtrade Username: " FREQTRADE_USERNAME
+        read -p "Freqtrade Password: " FREQTRADE_PASSWORD
+        read -p "JWT Secret Key: " JWT_SECRET
+        read -p "WebSocket Token: " WS_TOKEN
+    else
+        info "✅ Using newly generated secure credentials"
+    fi
+
+    # Get proxy configuration
+    echo ""
+    info "🌐 Proxy Configuration (for restricted countries)"
+    read -p "Do you need to use a proxy for Freqtrade? (y/N): " USE_PROXY
+
+    PROXY_URL=""
+    if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
+        read -p "Enter proxy URL (format: http://username:password@proxy.server:port): " PROXY_URL
+        if [ -n "$PROXY_URL" ]; then
+            info "🔧 Configuring proxy settings..."
+            
+            # Update docker-compose.yml with proxy settings
+            if [ -f "docker-compose.yml" ]; then
+                # Check if proxy environment variables already exist
+                if grep -q "HTTP_PROXY=" docker-compose.yml; then
+                    # Update existing proxy settings
+                    sed -i.bak "s|HTTP_PROXY=.*|HTTP_PROXY=${PROXY_URL}|g" docker-compose.yml
+                    sed -i.bak "s|HTTPS_PROXY=.*|HTTPS_PROXY=${PROXY_URL}|g" docker-compose.yml
+                    success "✅ Updated existing proxy settings in docker-compose.yml"
+                else
+                    # Add proxy settings to freqtrade service environment
+                    sed -i.bak '/FREQTRADE__API_SERVER__LISTEN_PORT=8080/a\
+          # Proxy settings for restricted countries\
+          - HTTP_PROXY='"${PROXY_URL}"'\
+          - HTTPS_PROXY='"${PROXY_URL}"'\
+          - NO_PROXY=localhost,127.0.0.1' docker-compose.yml
+                    success "✅ Added proxy settings to docker-compose.yml"
+                fi
+                rm -f docker-compose.yml.bak
+            fi
+            
+            # Update Freqtrade config with proxy settings
+            if [ -f "user_data/config_external_signals.json" ] && command_exists jq; then
+                info "🔧 Adding proxy settings to Freqtrade config..."
+                jq --arg proxy_url "$PROXY_URL" \
+                   '.exchange.ccxt_config.proxies = {
+                      "http": $proxy_url,
+                      "https": $proxy_url
+                    } | 
+                    .exchange.ccxt_async_config.proxies = {
+                      "http": $proxy_url,
+                      "https": $proxy_url
+                    }' \
+                   user_data/config_external_signals.json > user_data/config_temp.json && \
+                mv user_data/config_temp.json user_data/config_external_signals.json
+                success "✅ Added proxy settings to Freqtrade config"
+            fi
+            success "✅ Proxy configured: ${PROXY_URL}"
+        else
+            warn "⚠️  No proxy URL provided, skipping proxy configuration"
+        fi
+    else
+        info "ℹ️  No proxy configured"
+    fi
+
+    # Get OpenAI API credentials
+    echo ""
+    info "🤖 OpenAI API Configuration"
+    read -p "Enter your OpenAI API Key: " OPENAI_KEY
+    read -p "Enter OpenAI Base URL (default: https://api.openai.com/v1): " OPENAI_BASE_URL
+
+    # Use default if empty
+    if [ -z "$OPENAI_BASE_URL" ]; then
+        OPENAI_BASE_URL="https://api.openai.com/v1"
+    fi
+
     info "📝 Creating .env file with API credentials..."
     cat > .env << EOF
 # OpenAI API Configuration
