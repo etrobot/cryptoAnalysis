@@ -35,7 +35,36 @@ An intelligent crypto trading analysis platform with automated factor analysis, 
 ./update_openai_credentials.sh
 ```
 
-📖 **See [QUICK_START.md](QUICK_START.md) for detailed setup options**
+## ⚙️ Environment Configuration
+
+### Proxy Settings
+
+The application supports proxy configuration for users in restricted countries. You can configure proxy settings in the `.env` file:
+
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit proxy settings
+# To enable proxy:
+HTTP_PROXY=http://127.0.0.1:7890
+HTTPS_PROXY=http://127.0.0.1:7890
+NO_PROXY=freqtrade-bot,localhost,127.0.0.1
+
+# To disable proxy (leave empty):
+HTTP_PROXY=
+HTTPS_PROXY=
+NO_PROXY=
+```
+
+### Other Environment Variables
+
+- `OPENAI_API_KEY`: Your OpenAI API key for AI-powered analysis
+- `OPENAI_BASE_URL`: OpenAI API base URL (default: https://api.openai.com/v1)
+- `FREQTRADE_API_USERNAME`: Freqtrade API username (auto-configured)
+- `FREQTRADE_API_PASSWORD`: Freqtrade API password (auto-configured)
+
+📖 **See `.env.example` for all available configuration options**
 
 ## 🏗️ Project Structure
 

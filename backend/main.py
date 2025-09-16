@@ -43,6 +43,12 @@ from api import (
     stop_scheduled_tasks,
     set_scheduler_enabled,
     get_timeframe_analysis,
+    get_freqtrade_credentials,
+    test_freqtrade_connection,
+    get_freqtrade_health,
+    refresh_freqtrade_token,
+    get_open_trades,
+    run_scheduler_now,
 )
 from utils import get_task, TASK_VERSIONS
 from factors import list_factors
@@ -302,27 +308,33 @@ def login(request: AuthRequest) -> AuthResponse:
 
 # FreqTrade API routes
 @app.get("/api/freqtrade/credentials")
-def get_freqtrade_credentials():
+def get_freqtrade_credentials_route():
     """Get Freqtrade API credentials configuration"""
-    return api.get_freqtrade_credentials()
+    return get_freqtrade_credentials()
 
 
 @app.get("/api/freqtrade/test")
-def test_freqtrade_connection():
+def test_freqtrade_connection_route():
     """Test Freqtrade API connection and credentials"""
-    return api.test_freqtrade_connection()
+    return test_freqtrade_connection()
 
 
 @app.get("/api/freqtrade/health")
-def get_freqtrade_health():
+def get_freqtrade_health_route():
     """Check Freqtrade API health status"""
-    return api.get_freqtrade_health()
+    return get_freqtrade_health()
+
+
+@app.get("/api/freqtrade/open-trades")
+def get_freqtrade_open_trades_route():
+    """Proxy: List open trades from Freqtrade"""
+    return get_open_trades()
 
 
 @app.post("/api/freqtrade/refresh-token")
-def refresh_freqtrade_token():
+def refresh_freqtrade_token_route():
     """Force refresh Freqtrade API token"""
-    return api.refresh_freqtrade_token()
+    return refresh_freqtrade_token()
 
 
 @app.get("/api/scheduler/status")
@@ -341,6 +353,12 @@ def stop_scheduler_tasks():
 def enable_scheduler(enabled: bool = True):
     """Enable or disable scheduled tasks"""
     return set_scheduler_enabled(enabled)
+
+
+@app.post("/api/scheduler/run-now")
+def run_scheduler_now_route():
+    """Trigger daily task sequence immediately"""
+    return run_scheduler_now()
 
 
 @app.get("/api/timeframe-analysis")

@@ -17,8 +17,8 @@ from models import (
 from sqlmodel import select
 from utils import get_task, get_all_tasks, get_last_completed_task, TASK_STOP_EVENTS
 from data_management.services import create_analysis_task, create_news_evaluation_task
-from freqtrade_client import get_api_credentials, test_credentials, health as freqtrade_health, refresh_token
-from scheduler import get_scheduler_status, stop_current_scheduled_task, enable_scheduled_tasks
+from freqtrade_client import get_api_credentials, test_credentials, health as freqtrade_health, refresh_token, list_open_trades as ft_list_open_trades
+from scheduler import get_scheduler_status, stop_current_scheduled_task, enable_scheduled_tasks, run_daily_tasks_now
 
 
 def read_root():
@@ -366,6 +366,15 @@ def refresh_freqtrade_token():
         return {"success": False, "message": f"Error refreshing token: {str(e)}"}
 
 
+def get_open_trades():
+    """Return current open trades via Freqtrade API (proxied)."""
+    try:
+        trades = ft_list_open_trades()
+        return {"count": len(trades), "trades": trades}
+    except Exception as e:
+        return {"count": 0, "trades": [], "error": str(e)}
+
+
 def get_scheduler_status_api():
     """Get scheduler status and current tasks."""
     return get_scheduler_status()
@@ -395,6 +404,15 @@ def set_scheduler_enabled(enabled: bool):
         }
     except Exception as e:
         return {"success": False, "message": f"Error updating scheduler: {str(e)}"}
+
+
+def run_scheduler_now():
+    """Trigger the daily task sequence immediately (async)."""
+    try:
+        ok = run_daily_tasks_now()
+        return {"success": ok, "message": "Daily tasks scheduled to run now" if ok else "Failed to schedule run"}
+    except Exception as e:
+        return {"success": False, "message": f"Error scheduling run: {str(e)}"}
 
 
 def get_timeframe_analysis():

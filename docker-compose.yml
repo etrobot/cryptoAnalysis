@@ -3,15 +3,20 @@ services:
     build: .
     container_name: crypto-trader
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "14250:8000"  # 映射容器内8000端口到宿主机14250
     volumes:
       - ./data:/app/data  # 持久化数据目录
+      - ./user_data:/app/user_data:ro  # 读取 Freqtrade 配置以获取 API 凭据（只读）
     environment:
       - DATABASE_PATH=/app/data/crypto_data.db
       - FREQTRADE_API_URL=http://freqtrade-bot:8080
-      # Proxy settings for restricted countries (configured by deploy.sh)
-      - HTTP_PROXY=http://127.0.0.1:7890
+      # Proxy settings (configured via .env file)
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.crypto-trader.rule=Host(`btc.subx.fun`)"
@@ -34,10 +39,10 @@ services:
       - FREQTRADE__API_SERVER__ENABLED=true
       - FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS=0.0.0.0
       - FREQTRADE__API_SERVER__LISTEN_PORT=8080
-      # Proxy settings for restricted countries (configured by deploy.sh)
-      - HTTP_PROXY=http://127.0.0.1:7890
-      - HTTPS_PROXY=http://127.0.0.1:7890
-      - NO_PROXY=localhost,127.0.0.1
+      # Proxy settings (configured via .env file)
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
     ports:
       - "6677:8080"
     labels:

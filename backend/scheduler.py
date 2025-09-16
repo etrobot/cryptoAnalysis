@@ -5,10 +5,11 @@
 """
 from __future__ import annotations
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from data_management.services import create_analysis_task, create_news_evaluation_task
 from trade_signal_executor import execute_signals
 from candlestick_strategy import run_candlestick_strategy
@@ -59,6 +60,18 @@ class TaskScheduler:
                 name="Daily Trading Timeframe Review",
                 replace_existing=True
             )
+            
+            # 立即触发一次每日任务（延迟几秒，避免与启动竞争），便于部署后立即产生信号
+            try:
+                self.scheduler.add_job(
+                    func=self._run_daily_tasks,
+                    trigger=DateTrigger(run_date=datetime.now(timezone.utc) + timedelta(seconds=5)),
+                    id="bootstrap_daily_run",
+                    name="Bootstrap Daily Run",
+                    replace_existing=True
+                )
+            except Exception as e:
+                logger.warning(f"Failed to schedule bootstrap daily run: {e}")
             
             self.scheduler.start()
             self.is_running = True
@@ -235,9 +248,9 @@ class TaskScheduler:
 
                 signals = generate_buy_sell_signals_from_latest(top_n=5, current_open_positions=held_pairs)
                 batch = signals.get("sell", []) + signals.get("buy", [])
-                # 模拟交易：dry_run=True
-                result = execute_signals(batch, dry_run=True)
-                logger.info(f"Trade signals executed: {result}")
+                # 发送信号到 Freqtrade（Freqtrade 本身处于 dry_run 配置，安全模拟交易）
+                result = execute_signals(batch, dry_run=False)
+                logger.info(f"Trade signals executed (sent to Freqtrade): {result}")
             except Exception as e:
                 logger.error(f"Trade signal execution failed: {e}")
 
@@ -571,6 +584,22 @@ def stop_scheduler():
 def get_scheduler_status():
     """获取调度器状态"""
     return task_scheduler.get_status()
+
+
+def run_daily_tasks_now() -> bool:
+    """手动立即触发一次每日任务（异步加入调度器队列）"""
+    try:
+        task_scheduler.scheduler.add_job(
+            func=task_scheduler._run_daily_tasks,
+            trigger=DateTrigger(run_date=datetime.now(timezone.utc) + timedelta(seconds=1)),
+            id="manual_daily_run",
+            name="Manual Daily Run",
+            replace_existing=True
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to schedule manual daily run: {e}")
+        return False
 
 def stop_current_scheduled_task():
     """停止当前运行的定时任务"""

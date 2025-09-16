@@ -7,10 +7,10 @@ import requests
 logger = logging.getLogger(__name__)
 
 # Environment-based configuration
-API_BASE_URL = os.getenv("FREQTRADE_API_URL", "http://localhost:6677")  # default to mapped port
+API_BASE_URL = os.getenv("FREQTRADE_API_URL", "http://freqtrade-bot:8080")  # default to docker service
 API_USERNAME = os.getenv("FREQTRADE_API_USERNAME")
 API_PASSWORD = os.getenv("FREQTRADE_API_PASSWORD")
-API_TOKEN = os.getenv("FREQTRADE_API_TOKEN")  # If provided, preferred over username/password
+API_TOKEN = os.getenv("FREQTRADE_API_TOKEN")  # If provided and valid (JWT), preferred over username/password
 REQUEST_TIMEOUT = int(os.getenv("FREQTRADE_API_TIMEOUT", "15"))
 
 
@@ -29,13 +29,22 @@ def _get_headers(token: Optional[str]) -> Dict[str, str]:
     return headers
 
 
+def _get_auth() -> Optional[tuple]:
+    """Get basic authentication credentials."""
+    if API_USERNAME and API_PASSWORD:
+        return (API_USERNAME, API_PASSWORD)
+    return None
+
+
 def obtain_token() -> Optional[str]:
-    """Obtain JWT token from Freqtrade API if credentials provided.
-    If API_TOKEN env is set, return that directly.
+    """Obtain JWT token from Freqtrade API using username/password.
+    If API_TOKEN is already a valid-looking JWT (contains dots), reuse it.
     """
     global API_TOKEN
-    if API_TOKEN:
+    # Reuse cached token if it looks like a JWT
+    if API_TOKEN and API_TOKEN.count(".") >= 2:
         return API_TOKEN
+
     if not API_USERNAME or not API_PASSWORD:
         logger.warning("No Freqtrade API credentials provided; API calls may fail if auth is required.")
         return None
@@ -55,8 +64,11 @@ def obtain_token() -> Optional[str]:
 
 
 def _get_token_if_needed(token: Optional[str] = None) -> Optional[str]:
-    """Helper function to get token if not provided."""
-    return token or obtain_token()
+    """Helper function to get token if not provided. Avoid using non-JWT env tokens (e.g., WS tokens)."""
+    if token and token.count('.') >= 2:
+        return token
+    # If API_TOKEN was provided via env but is not a JWT, ignore and obtain a proper one.
+    return obtain_token()
 
 
 def get_api_credentials() -> Dict[str, Optional[str]]:
@@ -108,8 +120,15 @@ def refresh_token() -> Optional[str]:
 def health(token: Optional[str] = None) -> bool:
     """Check if Freqtrade API is healthy."""
     try:
-        token = _get_token_if_needed(token)
+        # First try with basic auth
+        auth = _get_auth()
         url = _api_url("/ping")
+        resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT)
+        if resp.ok:
+            return True
+        
+        # Fallback to token-based auth
+        token = _get_token_if_needed(token)
         resp = requests.get(url, headers=_get_headers(token), timeout=REQUEST_TIMEOUT)
         return resp.ok
     except Exception as e:
@@ -120,9 +139,15 @@ def health(token: Optional[str] = None) -> bool:
 def list_open_trades(token: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get list of open trades from Freqtrade."""
     try:
-        token = _get_token_if_needed(token)
+        # First try with basic auth
+        auth = _get_auth()
         url = _api_url("/open_trades")
-        resp = requests.get(url, headers=_get_headers(token), timeout=REQUEST_TIMEOUT)
+        resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT)
+        if not resp.ok:
+            # Fallback to token-based auth
+            token = _get_token_if_needed(token)
+            resp = requests.get(url, headers=_get_headers(token), timeout=REQUEST_TIMEOUT)
+        
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, dict) and "trades" in data:
@@ -139,9 +164,15 @@ def forceentry(pair: str, stake_amount: Optional[float] = None, token: Optional[
     if stake_amount is not None:
         payload["stake_amount"] = stake_amount
     try:
-        token = _get_token_if_needed(token)
+        # First try with basic auth
+        auth = _get_auth()
         url = _api_url("/forceentry")
-        resp = requests.post(url, json=payload, headers=_get_headers(token), timeout=REQUEST_TIMEOUT)
+        resp = requests.post(url, json=payload, auth=auth, timeout=REQUEST_TIMEOUT)
+        if not resp.ok:
+            # Fallback to token-based auth
+            token = _get_token_if_needed(token)
+            resp = requests.post(url, json=payload, headers=_get_headers(token), timeout=REQUEST_TIMEOUT)
+        
         if resp.ok:
             logger.info(f"Force entry sent for {pair}")
             return True
@@ -153,7 +184,6 @@ def forceentry(pair: str, stake_amount: Optional[float] = None, token: Optional[
 
 def forceexit_by_pair(pair: str, token: Optional[str] = None) -> int:
     """Force-exit all open trades for a given pair. Returns number of closes attempted."""
-    token = _get_token_if_needed(token)
     trades = list_open_trades(token)
     count = 0
     for t in trades:
@@ -162,8 +192,15 @@ def forceexit_by_pair(pair: str, token: Optional[str] = None) -> int:
             if trade_id is None:
                 continue
             try:
+                # First try with basic auth
+                auth = _get_auth()
                 url = _api_url(f"/forceexit/{trade_id}")
-                resp = requests.post(url, headers=_get_headers(token), timeout=REQUEST_TIMEOUT)
+                resp = requests.post(url, auth=auth, timeout=REQUEST_TIMEOUT)
+                if not resp.ok:
+                    # Fallback to token-based auth
+                    token = _get_token_if_needed(token)
+                    resp = requests.post(url, headers=_get_headers(token), timeout=REQUEST_TIMEOUT)
+                
                 if resp.ok:
                     count += 1
                 else:

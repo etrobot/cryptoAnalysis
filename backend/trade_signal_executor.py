@@ -15,9 +15,18 @@ def execute_signals(signals: List[Dict[str, Any]], dry_run: bool = False) -> Dic
     Returns summary dict.
     """
     token = obtain_token()
+    # Wait for Freqtrade API to be ready (retry a few times on cold start)
     ok = health(token)
     if not ok:
-        logger.error("Freqtrade API is not healthy or not reachable")
+        import time
+        retries = 6  # ~60s total
+        for i in range(retries):
+            time.sleep(10)
+            if health(token):
+                ok = True
+                break
+    if not ok:
+        logger.error("Freqtrade API is not healthy or not reachable after retries")
         return {"success": False, "executed": 0, "errors": ["api_unhealthy"]}
 
     executed = 0
