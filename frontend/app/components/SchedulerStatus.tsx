@@ -145,11 +145,12 @@ export function SchedulerStatus() {
   const isTaskRunning = phaseDisplay.isRunning
 
   return (
-    <Card className="p-4 space-y-4">
+    <Card className="p-2 space-y-1">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <span className="text-sm font-medium">{status.enabled ? '调度器已启用' : '调度器已禁用'}</span>
           <Button
+            variant="outline"
             size="sm"
             onClick={toggleScheduler}
             disabled={toggling}
@@ -157,7 +158,7 @@ export function SchedulerStatus() {
           >
             <span>{toggling ? '切换中...' : (status.enabled ? '禁用' : '启用')}</span>
           </Button>
-          <div className="text-sm font-medium">当前阶段:  {phaseDisplay.text} 上次运行: {formatDateTime(status.last_run)}</div>
+          <div className="text-xs">当前阶段:  {phaseDisplay.text} 上次运行: {formatDateTime(status.last_run)}</div>
 
         </div>
       </div>

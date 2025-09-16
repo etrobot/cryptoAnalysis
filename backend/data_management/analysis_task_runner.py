@@ -3,6 +3,8 @@ import logging
 import threading
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
+import json
+import os
 
 import numpy as np
 import pandas as pd
@@ -239,6 +241,28 @@ def run_analysis_task(
         task.completed_at = datetime.now().isoformat()
         task.result = result
         set_last_completed_task(task)
+
+        # 保存结果到ranking.json文件
+        try:
+            # 确保目录存在
+            os.makedirs("data_management", exist_ok=True)
+            ranking_file_path = "data_management/ranking.json"
+
+            # 准备要保存的数据
+            ranking_data = {
+                "task_id": task_id,
+                "completed_at": task.completed_at,
+                "count": result['count'],
+                "data": data
+            }
+
+            # 保存到JSON文件
+            with open(ranking_file_path, 'w', encoding='utf-8') as f:
+                json.dump(ranking_data, f, ensure_ascii=False, indent=2)
+            logger.info(f"Analysis results saved to {ranking_file_path}")
+        except Exception as e:
+            logger.error(f"Failed to save ranking.json: {e}")
+
         from utils import bump_task_version
 
         bump_task_version(task_id)

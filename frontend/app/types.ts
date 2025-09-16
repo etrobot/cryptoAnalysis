@@ -115,3 +115,10 @@ export type NewsTaskResult = {
   result?: NewsEvaluationResponse
   error?: string
 }
+
+export type RankingData = {
+  task_id: string
+  completed_at: string
+  count: number
+  data: FactorRecord[]
+}

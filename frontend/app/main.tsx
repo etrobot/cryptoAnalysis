@@ -4,8 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { DashboardPage } from './components/DashboardPage'
 import { NewsEvaluationPage } from './components/NewsEvaluationPage'
 import { SchedulerPage } from './components/SchedulerPage'
-import { BottomNavigation } from './components/BottomNavigation'
-import { SideNavigation } from './components/SideNavigation'
+import { UnifiedNavigation } from './components/UnifiedNavigation'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt'
 import { ThemeProvider } from './components/ThemeProvider'
@@ -40,7 +39,7 @@ function App() {
     <ThemeProvider>
       <BrowserRouter>
         <div className="min-h-screen flex w-full">
-          <SideNavigation />
+          <UnifiedNavigation />
           <div className="flex-1 flex flex-col w-full">
             <Routes>
               <Route path="/" element={<DashboardPage />} />
@@ -49,7 +48,6 @@ function App() {
               <Route path="/scheduler" element={<SchedulerPage />} />
             </Routes>
           </div>
-          <BottomNavigation />
 
           {/* PWA Components */}
           <PWAInstallPrompt />

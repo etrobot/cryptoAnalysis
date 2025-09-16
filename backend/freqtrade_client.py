@@ -141,7 +141,7 @@ def list_open_trades(token: Optional[str] = None) -> List[Dict[str, Any]]:
     try:
         # First try with basic auth
         auth = _get_auth()
-        url = _api_url("/open_trades")
+        url = _api_url("/status")  # Changed from /open_trades to /status
         resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT)
         if not resp.ok:
             # Fallback to token-based auth
@@ -164,9 +164,9 @@ def forceentry(pair: str, stake_amount: Optional[float] = None, token: Optional[
     if stake_amount is not None:
         payload["stake_amount"] = stake_amount
     try:
-        # First try with basic auth
+        # First try with basic auth using the correct endpoint
         auth = _get_auth()
-        url = _api_url("/forceentry")
+        url = _api_url("/forceenter")  # Changed from /forceentry to /forceenter
         resp = requests.post(url, json=payload, auth=auth, timeout=REQUEST_TIMEOUT)
         if not resp.ok:
             # Fallback to token-based auth
@@ -208,3 +208,6 @@ def forceexit_by_pair(pair: str, token: Optional[str] = None) -> int:
             except Exception as e:
                 logger.error(f"Force exit exception for trade {trade_id} ({pair}): {e}")
     return count
+
+
+# Note: Function uses /forceenter endpoint but keeps forceentry name for backward compatibility

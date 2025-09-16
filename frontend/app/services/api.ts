@@ -29,7 +29,7 @@ export const api = {
   async startAnalysis(topN: number = 50, selectedFactors?: string[], collectLatestData: boolean = true): Promise<RunResponse> {
     return apiCall<RunResponse>('/run', {
       method: 'POST',
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         top_n: topN,
         selected_factors: selectedFactors,
         collect_latest_data: collectLatestData
@@ -61,7 +61,7 @@ export const api = {
   async startNewsEvaluation(topN: number = 10, newsPerSymbol: number = 3, openaiModel: string = "gpt-oss-120b"): Promise<RunResponse> {
     return apiCall<RunResponse>('/run-news-evaluation', {
       method: 'POST',
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         top_n: topN,
         news_per_symbol: newsPerSymbol,
         openai_model: openaiModel
@@ -79,6 +79,10 @@ export const api = {
 
   async getLatestNewsResults(): Promise<NewsTaskResult> {
     return apiCall<NewsTaskResult>('/results')
+  },
+
+  async getRankingData(): Promise<any> {
+    return apiCall<any>('/api/ranking')
   },
 }
 

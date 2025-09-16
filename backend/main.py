@@ -367,6 +367,25 @@ def get_timeframe_analysis_route():
     return get_timeframe_analysis()
 
 
+@app.get("/api/ranking")
+def get_ranking_data():
+    """Get the latest ranking data from ranking.json"""
+    import json
+    import os
+
+    ranking_file_path = "data_management/ranking.json"
+
+    if not os.path.exists(ranking_file_path):
+        return {"error": "ranking.json not found", "message": "No ranking data available yet"}
+
+    try:
+        with open(ranking_file_path, 'r', encoding='utf-8') as f:
+            ranking_data = json.load(f)
+        return ranking_data
+    except Exception as e:
+        return {"error": f"Failed to read ranking.json: {str(e)}"}
+
+
 # Serve frontend for production
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
