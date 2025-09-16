@@ -1,6 +1,6 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, TrendingUp, Newspaper, Clock } from 'lucide-react'
+import { TrendingUp, Newspaper, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
@@ -11,11 +11,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  // {
-  //   path: '/',
-  //   label: '仪表板',
-  //   icon: Home
-  // },
+  {
+    path: '/',
+    label: '定时任务',
+    icon: Clock
+  },
   {
     path: '/analysis',
     label: '分析',
@@ -25,11 +25,6 @@ const navItems: NavItem[] = [
     path: '/news-evaluation',
     label: '新闻评估',
     icon: Newspaper
-  },
-  {
-    path: '/scheduler',
-    label: '定时任务',
-    icon: Clock
   }
 ]
 

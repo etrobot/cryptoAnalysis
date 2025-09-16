@@ -4,18 +4,19 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  Clock, 
-  Play, 
-  Pause, 
-  RefreshCw, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Clock,
+  Play,
+  Pause,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   Calendar,
   TrendingUp,
   BarChart3
 } from 'lucide-react'
+import { useAuth } from '@/services/auth'
 
 interface TaskInfo {
   task_id?: string
@@ -65,6 +66,15 @@ export function SchedulerPage() {
   const [timeframeAnalysis, setTimeframeAnalysis] = useState<TimeframeAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { isAuthenticated } = useAuth()
+
+  const requireAuth = (action: () => void) => {
+    if (!isAuthenticated) {
+      setError('请先登录后再执行此操作')
+      return
+    }
+    action()
+  }
 
   const fetchSchedulerStatus = async () => {
     try {
@@ -187,18 +197,19 @@ export function SchedulerPage() {
         <div className="flex items-center gap-2">
           <Button
             variant={schedulerStatus?.enabled ? "destructive" : "default"}
-            onClick={() => toggleScheduler(!schedulerStatus?.enabled)}
+            onClick={() => requireAuth(() => toggleScheduler(!schedulerStatus?.enabled))}
+            disabled={!isAuthenticated}
           >
             {schedulerStatus?.enabled ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
             {schedulerStatus?.enabled ? '禁用' : '启用'}定时任务
           </Button>
-          
-          <Button variant="outline" onClick={stopCurrentTasks}>
+
+          <Button variant="outline" onClick={() => requireAuth(stopCurrentTasks)} disabled={!isAuthenticated}>
             <XCircle className="h-4 w-4 mr-2" />
             停止当前任务
           </Button>
-          
-          <Button variant="outline" onClick={() => window.location.reload()}>
+
+          <Button variant="outline" onClick={() => requireAuth(() => window.location.reload())} disabled={!isAuthenticated}>
             <RefreshCw className="h-4 w-4 mr-2" />
             刷新
           </Button>
