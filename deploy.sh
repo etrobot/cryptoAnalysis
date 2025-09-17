@@ -65,9 +65,8 @@ if [ ! -f "user_data/config_external_signals.json" ]; then
   error "❌ Please create your Freqtrade configuration before deployment"
   exit 1
 else
-  info "🔧 Updating existing Freqtrade config with new security credentials..."
-  # Generate new credentials for existing config
-  generate_api_credentials
+  info "🔧 Updating existing Freqtrade config with generated security credentials..."
+  # Don't regenerate credentials - use the ones already generated above
   
   # Backup existing config
   cp user_data/config_external_signals.json user_data/config_external_signals.json.backup.$(date +%Y%m%d_%H%M%S)
@@ -148,6 +147,23 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         read -p "Freqtrade Password: " FREQTRADE_PASSWORD
         read -p "JWT Secret Key: " JWT_SECRET
         read -p "WebSocket Token: " WS_TOKEN
+        
+        # Update user_data config with manually entered credentials
+        if [ -f "user_data/config_external_signals.json" ] && command_exists jq; then
+            info "🔧 Updating Freqtrade config with manually entered credentials..."
+            jq --arg username "$FREQTRADE_USERNAME" \
+               --arg password "$FREQTRADE_PASSWORD" \
+               --arg jwt_secret "$JWT_SECRET" \
+               --arg ws_token "$WS_TOKEN" \
+               '.api_server.username = $username | 
+                .api_server.password = $password | 
+                .api_server.jwt_secret_key = $jwt_secret | 
+                .api_server.ws_token = [$ws_token] |
+                .api_server.CORS_origins = ["http://localhost:3000", "http://localhost:14250", "https://btc.subx.fun", "https://ftui.subx.fun"]' \
+               user_data/config_external_signals.json > user_data/config_temp.json && \
+            mv user_data/config_temp.json user_data/config_external_signals.json
+            success "✅ Updated Freqtrade config with manually entered credentials"
+        fi
     else
         info "✅ Using newly generated secure credentials"
     fi
