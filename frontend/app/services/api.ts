@@ -1,6 +1,6 @@
 import { TaskResult, RunResponse, FactorListResponse, NewsTaskResult } from '../types'
 
-const API_BASE_URL: string = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:14250'
+export const API_BASE_URL: string = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:14250'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -83,6 +83,85 @@ export const api = {
 
   async getRankingData(): Promise<any> {
     return apiCall<any>('/api/ranking')
+  },
+
+  // Scheduler and timeframe endpoints
+  async getSchedulerStatus(): Promise<import('../types').SchedulerStatusDTO> {
+    return apiCall<any>('/api/scheduler/status')
+  },
+  async setSchedulerEnabled(enabled: boolean): Promise<any> {
+    return apiCall<any>(`/api/scheduler/enable?enabled=${enabled}`, { method: 'POST' })
+  },
+  async stopScheduledTasks(): Promise<any> {
+    return apiCall<any>('/api/scheduler/stop', { method: 'POST' })
+  },
+  async runSchedulerNow(): Promise<any> {
+    return apiCall<any>('/api/scheduler/run-now', { method: 'POST' })
+  },
+  async getTimeframeAnalysis(): Promise<any> {
+    return apiCall<any>('/api/timeframe-analysis')
+  },
+
+  // SSE for scheduler status with optional auto-retry
+  createSchedulerStatusSSE(
+    onUpdate: (status: import('../types').SchedulerStatusDTO) => void,
+    onError: (error: string) => void,
+    options?: { retry?: boolean; maxRetries?: number; baseDelayMs?: number }
+  ): () => void {
+    const url = `${API_BASE_URL}/api/scheduler/events`
+    let closed = false
+    let es: EventSource | null = null
+
+    const { retry = false, maxRetries = 3, baseDelayMs = 2000 } = options || {}
+    let attempts = 0
+
+    const connect = () => {
+      if (closed) return
+      try {
+        es = new EventSource(url)
+      } catch (e) {
+        onError('无法连接到调度器事件流')
+        return
+      }
+
+      es.addEventListener('update', handleUpdate)
+      es.onerror = handleError
+    }
+
+    const handleUpdate = (ev: MessageEvent) => {
+      try {
+        const status = JSON.parse(ev.data)
+        attempts = 0 // reset attempts on successful update
+        onUpdate(status)
+      } catch (err) {
+        console.error('解析调度器SSE数据失败', err)
+      }
+    }
+
+    const handleError = (err: any) => {
+      if (closed) return
+      console.error('调度器SSE连接错误', err)
+      es?.close()
+      onError('调度器SSE连接错误')
+
+      if (retry && attempts < maxRetries) {
+        attempts += 1
+        const delay = baseDelayMs * Math.pow(2, attempts - 1)
+        setTimeout(() => {
+          if (!closed) connect()
+        }, delay)
+      }
+    }
+
+    connect()
+
+    return () => {
+      closed = true
+      try {
+        es?.removeEventListener('update', handleUpdate)
+        es?.close()
+      } catch {}
+    }
   },
 }
 

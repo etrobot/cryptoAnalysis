@@ -1,8 +1,8 @@
 import { ProgressBar } from './ProgressBar'
-import { TaskResult, ConceptTaskResult } from '../types'
+import { TaskResult } from '../types'
 
 interface TaskProgressCardProps {
-  task: TaskResult | ConceptTaskResult
+  task: TaskResult
   title?: string
 }
 

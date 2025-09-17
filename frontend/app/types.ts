@@ -122,3 +122,22 @@ export type RankingData = {
   count: number
   data: FactorRecord[]
 }
+
+// Scheduler types
+export type SimpleTaskInfo = {
+  task_id?: string
+  status?: string
+  progress?: number
+  message?: string
+}
+
+export type SchedulerStatusDTO = {
+  scheduler_running: boolean
+  enabled: boolean
+  last_run?: string | null
+  next_run?: string | null
+  current_analysis_task?: SimpleTaskInfo | null
+  current_news_task?: SimpleTaskInfo | null
+  current_candlestick_task?: SimpleTaskInfo | null
+  current_timeframe_review_task?: SimpleTaskInfo | null
+}

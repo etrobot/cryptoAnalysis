@@ -61,25 +61,46 @@ export class AuthService {
   }
 
   /**
-   * 用户认证
+   * 用户认证（弱校验：仅需用户名和邮箱）
    */
-  static async authenticate(username: string, email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  static async authenticate(username: string, email: string): Promise<{ success: boolean; error?: string; message?: string }> {
     try {
-      // Use the same API base URL logic as the api service
-      const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:14250'
+      // 基本输入验证
+      if (!username || !username.trim()) {
+        return { success: false, error: '用户名不能为空' }
+      }
       
+      if (!email || !email.trim()) {
+        return { success: false, error: '邮箱不能为空' }
+      }
+      
+      // 简单的邮箱格式验证
+      const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+      if (!emailPattern.test(email.trim())) {
+        return { success: false, error: '邮箱格式不正确' }
+      }
+
+      // Use the same API base URL logic as the api service
+      const { API_BASE_URL } = await import('./api')
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: username, email, password }),
+        body: JSON.stringify({ 
+          name: username.trim(), 
+          email: email.trim() 
+          // 弱校验模式：不发送密码
+        }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        this.setAuth(data.token || 'authenticated', { name: username, email })
-        return { success: true }
+        this.setAuth(data.token || 'authenticated', { name: username.trim(), email: email.trim() })
+        return { 
+          success: true, 
+          message: data.message || '认证成功' 
+        }
       } else {
         const error = await response.json()
         return { success: false, error: error.message || '认证失败' }

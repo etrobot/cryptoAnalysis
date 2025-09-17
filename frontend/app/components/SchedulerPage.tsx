@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect, useRef } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
+import { SchedulerOverviewCard, formatDateTime } from './SchedulerOverviewCard'
+import { SchedulerTaskCard } from './SchedulerTaskCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Clock,
   Play,
   Pause,
   RefreshCw,
-  CheckCircle,
   XCircle,
   AlertCircle,
   Calendar,
@@ -17,24 +17,9 @@ import {
   BarChart3
 } from 'lucide-react'
 import { useAuth } from '@/services/auth'
-
-interface TaskInfo {
-  task_id?: string
-  status?: string
-  progress?: number
-  message?: string
-}
-
-interface SchedulerStatus {
-  scheduler_running: boolean
-  enabled: boolean
-  last_run?: string
-  next_run?: string
-  current_analysis_task?: TaskInfo
-  current_news_task?: TaskInfo
-  current_candlestick_task?: TaskInfo
-  current_timeframe_review_task?: TaskInfo
-}
+import { api } from '@/services/api'
+import { CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { SchedulerStatusDTO } from '@/types'
 
 interface TimeframeAnalysis {
   analysis_date?: string
@@ -62,7 +47,7 @@ interface TimeframeAnalysis {
 }
 
 export function SchedulerPage() {
-  const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null)
+  const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatusDTO | null>(null)
   const [timeframeAnalysis, setTimeframeAnalysis] = useState<TimeframeAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -76,23 +61,22 @@ export function SchedulerPage() {
     action()
   }
 
-  const fetchSchedulerStatus = async () => {
+  const fetchSchedulerStatus = async (): Promise<SchedulerStatusDTO | null> => {
     try {
-      const response = await fetch('/api/scheduler/status')
-      if (!response.ok) throw new Error('Failed to fetch scheduler status')
-      const data = await response.json()
+      const data = await api.getSchedulerStatus()
       setSchedulerStatus(data)
+      setError(null)
+      return data
     } catch (err) {
       console.error('Error fetching scheduler status:', err)
       setError('获取调度器状态失败')
+      return null
     }
   }
 
   const fetchTimeframeAnalysis = async () => {
     try {
-      const response = await fetch('/api/timeframe-analysis')
-      if (!response.ok) throw new Error('Failed to fetch timeframe analysis')
-      const data = await response.json()
+      const data = await api.getTimeframeAnalysis()
       setTimeframeAnalysis(data)
     } catch (err) {
       console.error('Error fetching timeframe analysis:', err)
@@ -102,10 +86,7 @@ export function SchedulerPage() {
 
   const toggleScheduler = async (enabled: boolean) => {
     try {
-      const response = await fetch(`/api/scheduler/enable?enabled=${enabled}`, {
-        method: 'POST'
-      })
-      if (!response.ok) throw new Error('Failed to toggle scheduler')
+      await api.setSchedulerEnabled(enabled)
       await fetchSchedulerStatus()
     } catch (err) {
       console.error('Error toggling scheduler:', err)
@@ -115,10 +96,7 @@ export function SchedulerPage() {
 
   const stopCurrentTasks = async () => {
     try {
-      const response = await fetch('/api/scheduler/stop', {
-        method: 'POST'
-      })
-      if (!response.ok) throw new Error('Failed to stop tasks')
+      await api.stopScheduledTasks()
       await fetchSchedulerStatus()
     } catch (err) {
       console.error('Error stopping tasks:', err)
@@ -126,54 +104,62 @@ export function SchedulerPage() {
     }
   }
 
+  const sseStopRef = useRef<null | (() => void)>(null)
+
+  const startSSE = () => {
+    if (sseStopRef.current) sseStopRef.current()
+    sseStopRef.current = api.createSchedulerStatusSSE(
+      (status) => {
+        setSchedulerStatus(status)
+        setError(null)
+        setLoading(false)
+        const isActive = (t?: { status?: string } | null) => t && (t.status === 'running' || t.status === 'pending')
+        if (!isActive(status?.current_analysis_task) &&
+            !isActive(status?.current_news_task) &&
+            !isActive(status?.current_candlestick_task) &&
+            !isActive(status?.current_timeframe_review_task)) {
+          if (sseStopRef.current) { sseStopRef.current(); sseStopRef.current = null }
+        }
+      },
+      (err) => {
+        console.error(err)
+        setError('调度器事件流连接失败，已退化为单次获取')
+        fetchSchedulerStatus().then((s) => {
+          const isActive = (t?: { status?: string } | null) => t && (t.status === 'running' || t.status === 'pending')
+          const active = s && (isActive(s.current_analysis_task) || isActive(s.current_news_task) || isActive(s.current_candlestick_task) || isActive(s.current_timeframe_review_task))
+          if (active && !sseStopRef.current) {
+            sseStopRef.current = api.createSchedulerStatusSSE(
+              (d) => { setSchedulerStatus(d); setLoading(false) },
+              () => {},
+              { retry: true, maxRetries: 3, baseDelayMs: 2000 }
+            )
+          }
+        }).finally(() => setLoading(false))
+      },
+      { retry: true, maxRetries: 3, baseDelayMs: 2000 }
+    )
+  }
+
   useEffect(() => {
-    const loadData = async () => {
+    const init = async () => {
       setLoading(true)
-      await Promise.all([fetchSchedulerStatus(), fetchTimeframeAnalysis()])
-      setLoading(false)
+      try {
+        await fetchTimeframeAnalysis()
+        startSSE()
+      } catch (e) {
+        setError('初始化失败')
+        setLoading(false)
+      }
     }
-    
-    loadData()
-    
-    // 定期刷新状态
-    const interval = setInterval(() => {
-      fetchSchedulerStatus()
-    }, 5000)
-    
-    return () => clearInterval(interval)
+
+    init()
+
+    return () => {
+      if (sseStopRef.current) sseStopRef.current()
+    }
   }, [])
 
-  const getStatusIcon = (status?: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />
-      case 'failed':
-        return <XCircle className="h-4 w-4 text-red-500" />
-      case 'running':
-        return <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
-      default:
-        return <AlertCircle className="h-4 w-4 text-gray-400" />
-    }
-  }
 
-  const getStatusBadge = (status?: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      completed: "default",
-      failed: "destructive", 
-      running: "secondary",
-      pending: "outline"
-    }
-    return <Badge variant={variants[status || ''] || "outline"}>{status || '未知'}</Badge>
-  }
-
-  const formatDateTime = (dateStr?: string) => {
-    if (!dateStr) return '未知'
-    try {
-      return new Date(dateStr).toLocaleString('zh-CN')
-    } catch {
-      return dateStr
-    }
-  }
 
   if (loading) {
     return (
@@ -187,7 +173,7 @@ export function SchedulerPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">定时任务管理</h1>
@@ -209,7 +195,7 @@ export function SchedulerPage() {
             停止当前任务
           </Button>
 
-          <Button variant="outline" onClick={() => requireAuth(() => window.location.reload())} disabled={!isAuthenticated}>
+          <Button variant="outline" onClick={() => requireAuth(async () => { setLoading(true); await fetchTimeframeAnalysis(); startSSE(); })} disabled={!isAuthenticated}>
             <RefreshCw className="h-4 w-4 mr-2" />
             刷新
           </Button>
@@ -235,217 +221,46 @@ export function SchedulerPage() {
 
         <TabsContent value="status" className="space-y-4">
           {/* 调度器概览 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                调度器概览
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">运行状态</p>
-                  <div className="flex items-center gap-2">
-                    {schedulerStatus?.scheduler_running ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="font-medium">
-                      {schedulerStatus?.scheduler_running ? '运行中' : '已停止'}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">任务启用</p>
-                  <div className="flex items-center gap-2">
-                    {schedulerStatus?.enabled ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="font-medium">
-                      {schedulerStatus?.enabled ? '已启用' : '已禁用'}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">上次运行</p>
-                  <span className="text-sm font-mono">
-                    {formatDateTime(schedulerStatus?.last_run)}
-                  </span>
-                </div>
-                
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">下次运行</p>
-                  <span className="text-sm font-mono">
-                    {formatDateTime(schedulerStatus?.next_run)}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <SchedulerOverviewCard
+            scheduler_running={schedulerStatus?.scheduler_running}
+            enabled={schedulerStatus?.enabled}
+            last_run={schedulerStatus?.last_run ?? null}
+            next_run={schedulerStatus?.next_run ?? null}
+          />
 
           {/* 当前任务 */}
           <div className="grid md:grid-cols-2 gap-4">
             {/* 分析任务 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  分析任务
-                </CardTitle>
-                <CardDescription>每日加密货币分析任务</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {schedulerStatus?.current_analysis_task ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      {getStatusIcon(schedulerStatus.current_analysis_task.status)}
-                      {getStatusBadge(schedulerStatus.current_analysis_task.status)}
-                    </div>
-                    
-                    {schedulerStatus.current_analysis_task.progress !== undefined && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>进度</span>
-                          <span>{Math.round((schedulerStatus.current_analysis_task.progress || 0) * 100)}%</span>
-                        </div>
-                        <Progress value={(schedulerStatus.current_analysis_task.progress || 0) * 100} />
-                      </div>
-                    )}
-                    
-                    {schedulerStatus.current_analysis_task.message && (
-                      <p className="text-sm text-muted-foreground">
-                        {schedulerStatus.current_analysis_task.message}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">当前无运行任务</p>
-                )}
-              </CardContent>
-            </Card>
+            <SchedulerTaskCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              title="分析任务"
+              description="每日加密货币分析任务"
+              task={schedulerStatus?.current_analysis_task ?? null}
+            />
 
             {/* 新闻任务 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  新闻评估任务
-                </CardTitle>
-                <CardDescription>每日新闻情感分析任务</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {schedulerStatus?.current_news_task ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      {getStatusIcon(schedulerStatus.current_news_task.status)}
-                      {getStatusBadge(schedulerStatus.current_news_task.status)}
-                    </div>
-                    
-                    {schedulerStatus.current_news_task.progress !== undefined && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>进度</span>
-                          <span>{Math.round((schedulerStatus.current_news_task.progress || 0) * 100)}%</span>
-                        </div>
-                        <Progress value={(schedulerStatus.current_news_task.progress || 0) * 100} />
-                      </div>
-                    )}
-                    
-                    {schedulerStatus.current_news_task.message && (
-                      <p className="text-sm text-muted-foreground">
-                        {schedulerStatus.current_news_task.message}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">当前无运行任务</p>
-                )}
-              </CardContent>
-            </Card>
+            <SchedulerTaskCard
+              icon={<Calendar className="h-4 w-4" />}
+              title="新闻评估任务"
+              description="每日新闻情感分析任务"
+              task={schedulerStatus?.current_news_task ?? null}
+            />
 
             {/* K线策略任务 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  K线策略任务
-                </CardTitle>
-                <CardDescription>每10分钟K线模式交易策略</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {schedulerStatus?.current_candlestick_task ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      {getStatusIcon(schedulerStatus.current_candlestick_task.status)}
-                      {getStatusBadge(schedulerStatus.current_candlestick_task.status)}
-                    </div>
-                    
-                    {schedulerStatus.current_candlestick_task.progress !== undefined && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>进度</span>
-                          <span>{Math.round((schedulerStatus.current_candlestick_task.progress || 0) * 100)}%</span>
-                        </div>
-                        <Progress value={(schedulerStatus.current_candlestick_task.progress || 0) * 100} />
-                      </div>
-                    )}
-                    
-                    {schedulerStatus.current_candlestick_task.message && (
-                      <p className="text-sm text-muted-foreground">
-                        {schedulerStatus.current_candlestick_task.message}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">当前无运行任务</p>
-                )}
-              </CardContent>
-            </Card>
+            <SchedulerTaskCard
+              icon={<BarChart3 className="h-4 w-4" />}
+              title="K线策略任务"
+              description="每10分钟K线模式交易策略"
+              task={schedulerStatus?.current_candlestick_task ?? null}
+            />
 
             {/* 时间周期梳理任务 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  时间周期梳理
-                </CardTitle>
-                <CardDescription>每日交易时间周期分析</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {schedulerStatus?.current_timeframe_review_task ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      {getStatusIcon(schedulerStatus.current_timeframe_review_task.status)}
-                      {getStatusBadge(schedulerStatus.current_timeframe_review_task.status)}
-                    </div>
-                    
-                    {schedulerStatus.current_timeframe_review_task.progress !== undefined && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>进度</span>
-                          <span>{Math.round((schedulerStatus.current_timeframe_review_task.progress || 0) * 100)}%</span>
-                        </div>
-                        <Progress value={(schedulerStatus.current_timeframe_review_task.progress || 0) * 100} />
-                      </div>
-                    )}
-                    
-                    {schedulerStatus.current_timeframe_review_task.message && (
-                      <p className="text-sm text-muted-foreground">
-                        {schedulerStatus.current_timeframe_review_task.message}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">当前无运行任务</p>
-                )}
-              </CardContent>
-            </Card>
+            <SchedulerTaskCard
+              icon={<Clock className="h-4 w-4" />}
+              title="时间周期梳理"
+              description="每日交易时间周期分析"
+              task={schedulerStatus?.current_timeframe_review_task ?? null}
+            />
           </div>
         </TabsContent>
 

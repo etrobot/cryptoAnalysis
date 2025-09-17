@@ -42,10 +42,9 @@ function App() {
           <UnifiedNavigation />
           <div className="flex-1 flex flex-col w-full">
             <Routes>
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/" element={<SchedulerPage />} />
               <Route path="/analysis" element={<DashboardPage />} />
               <Route path="/news-evaluation" element={<NewsEvaluationPage />} />
-              <Route path="/scheduler" element={<SchedulerPage />} />
             </Routes>
           </div>
 

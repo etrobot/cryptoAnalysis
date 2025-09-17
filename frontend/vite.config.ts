@@ -14,5 +14,21 @@ export default defineConfig({
     hmr: {
       port: 14245,
     },
+    proxy: {
+      // Proxy API requests to the FastAPI backend during development
+      '/api': {
+        target: 'http://localhost:14250',
+        changeOrigin: true,
+      },
+      '/task': {
+        target: 'http://localhost:14250',
+        changeOrigin: true,
+      },
+      // Additional endpoints served by backend (optional)
+      '/docs': {
+        target: 'http://localhost:14250',
+        changeOrigin: true,
+      }
+    }
   },
 })

@@ -84,7 +84,7 @@ class Message(BaseModel):
 class AuthRequest(BaseModel):
     name: str
     email: str
-    password: str
+    password: Optional[str] = None  # 密码变为可选，用于弱校验
 
 
 class AuthResponse(BaseModel):

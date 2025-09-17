@@ -3,7 +3,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
-from freqtrade_client import obtain_token, health, forceentry, forceexit_by_pair
+from freqtrade_client import health, forceentry, forceexit_by_pair
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +14,14 @@ def execute_signals(signals: List[Dict[str, Any]], dry_run: bool = False) -> Dic
     signals: List of { pair: "BTC/USDT", side: "buy"|"sell", stake_amount?: number }
     Returns summary dict.
     """
-    token = obtain_token()
     # Wait for Freqtrade API to be ready (retry a few times on cold start)
-    ok = health(token)
+    ok = health()
     if not ok:
         import time
         retries = 6  # ~60s total
         for i in range(retries):
             time.sleep(10)
-            if health(token):
+            if health():
                 ok = True
                 break
     if not ok:
@@ -47,10 +46,10 @@ def execute_signals(signals: List[Dict[str, Any]], dry_run: bool = False) -> Dic
                 continue
 
             if side == "buy":
-                if forceentry(pair, stake_amount=stake, token=token):
+                if forceentry(pair, stake_amount=stake):
                     executed += 1
             else:  # sell
-                closed = forceexit_by_pair(pair, token=token)
+                closed = forceexit_by_pair(pair)
                 executed += closed
         except Exception as e:
             logger.error(f"Execute signal failed for {pair} {side}: {e}")

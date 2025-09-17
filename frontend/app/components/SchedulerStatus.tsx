@@ -1,29 +1,13 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
-import { Badge } from './ui/badge'
-import { Clock, Play, Square, AlertCircle, CheckCircle, Settings } from 'lucide-react'
+import { Clock, Play, Square, AlertCircle } from 'lucide-react'
+import { api } from '@/services/api'
+import { SchedulerTaskCard } from './SchedulerTaskCard'
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:14250'
+import type { SchedulerStatusDTO } from '@/types'
 
-interface SchedulerStatusData {
-  scheduler_running: boolean
-  enabled: boolean
-  last_run: string | null
-  next_run: string | null
-  current_analysis_task: {
-    task_id: string
-    status: string
-    progress: number
-    message: string
-  } | null
-  current_news_task: {
-    task_id: string
-    status: string
-    progress: number
-    message: string
-  } | null
-}
+type SchedulerStatusData = SchedulerStatusDTO
 
 export function SchedulerStatus() {
   const [status, setStatus] = useState<SchedulerStatusData | null>(null)
@@ -31,15 +15,14 @@ export function SchedulerStatus() {
   const [stopping, setStopping] = useState(false)
   const [toggling, setToggling] = useState(false)
 
-  const fetchStatus = async () => {
+  const fetchStatus = async (): Promise<SchedulerStatusData | null> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/scheduler/status`)
-      if (response.ok) {
-        const data = await response.json()
-        setStatus(data)
-      }
+      const data = await api.getSchedulerStatus()
+      setStatus(data)
+      return data
     } catch (error) {
       console.error('Failed to fetch scheduler status:', error)
+      return null
     } finally {
       setLoading(false)
     }
@@ -48,13 +31,10 @@ export function SchedulerStatus() {
   const stopCurrentTask = async () => {
     setStopping(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/scheduler/stop`, { method: 'POST' })
-      if (response.ok) {
-        const result = await response.json()
-        console.log(result.message)
-        // Refresh status after a short delay
-        setTimeout(fetchStatus, 1000)
-      }
+      const result = await api.stopScheduledTasks()
+      console.log(result.message)
+      // Refresh status after a short delay
+      setTimeout(fetchStatus, 1000)
     } catch (error) {
       console.error('Failed to stop task:', error)
     } finally {
@@ -67,15 +47,10 @@ export function SchedulerStatus() {
     
     setToggling(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/scheduler/enable?enabled=${!status.enabled}`, { 
-        method: 'POST' 
-      })
-      if (response.ok) {
-        const result = await response.json()
-        console.log(result.message)
-        // Refresh status
-        fetchStatus()
-      }
+      const result = await api.setSchedulerEnabled(!status.enabled)
+      console.log(result.message)
+      // Refresh status
+      fetchStatus()
     } catch (error) {
       console.error('Failed to toggle scheduler:', error)
     } finally {
@@ -84,10 +59,38 @@ export function SchedulerStatus() {
   }
 
   useEffect(() => {
-    fetchStatus()
-    // Refresh status every 30 seconds
-    const interval = setInterval(fetchStatus, 30000)
-    return () => clearInterval(interval)
+    // Prefer SSE over polling
+    let stop: (() => void) | null = api.createSchedulerStatusSSE(
+      (data) => {
+        setStatus(data)
+        setLoading(false)
+        // 如果检测到不在运行中（已成功或失败/空闲），则关闭 SSE，不再继续
+        const isActive = (t?: { status?: string } | null) => t && (t.status === 'running' || t.status === 'pending')
+        if (!isActive(data?.current_analysis_task) &&
+            !isActive(data?.current_news_task) &&
+            !isActive(data?.current_candlestick_task) &&
+            !isActive(data?.current_timeframe_review_task)) {
+          if (stop) { stop(); stop = null }
+        }
+      },
+      (err) => {
+        console.error(err)
+        // fallback: 单次抓取，并在有任务运行时自动重连 SSE（带退避）
+        fetchStatus().then((s: SchedulerStatusData | null) => {
+          const isActive = (t?: { status?: string } | null) => t && (t.status === 'running' || t.status === 'pending')
+          const active = s && (isActive(s.current_analysis_task) || isActive(s.current_news_task) || isActive(s.current_candlestick_task) || isActive(s.current_timeframe_review_task))
+          if (active && !stop) {
+            stop = api.createSchedulerStatusSSE(
+              (d) => { setStatus(d); setLoading(false) },
+              () => {},
+              { retry: true, maxRetries: 3, baseDelayMs: 2000 }
+            )
+          }
+        })
+      },
+      { retry: true, maxRetries: 3, baseDelayMs: 2000 }
+    )
+    return () => { if (stop) stop() }
   }, [])
 
   if (loading) {
@@ -158,56 +161,26 @@ export function SchedulerStatus() {
           >
             <span>{toggling ? '切换中...' : (status.enabled ? '禁用' : '启用')}</span>
           </Button>
-          <div className="text-xs">当前阶段:  {phaseDisplay.text} 上次运行: {formatDateTime(status.last_run)}</div>
+          <div className="text-xs">当前阶段:  {phaseDisplay.text} 上次运行: {formatDateTime(status.last_run ?? null)}</div>
 
         </div>
       </div>
-
-      <div className="flex gap-6">
-        <div className="space-y-2">
-          {status.current_analysis_task && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">分析任务:</span>
-                <Badge variant={status.current_analysis_task.status === 'running' ? 'default' : 'secondary'}>
-                  {status.current_analysis_task.status}
-                </Badge>
-              </div>
-              {status.current_analysis_task.progress > 0 && (
-                <div className="text-xs text-gray-600">
-                  进度: {Math.round(status.current_analysis_task.progress * 100)}%
-                </div>
-              )}
-              {status.current_analysis_task.message && (
-                <div className="text-xs text-gray-600">
-                  {status.current_analysis_task.message}
-                </div>
-              )}
-            </div>
-          )}
-          
-          {status.current_news_task && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">新闻任务:</span>
-                <Badge variant={status.current_news_task.status === 'running' ? 'default' : 'secondary'}>
-                  {status.current_news_task.status}
-                </Badge>
-              </div>
-              {status.current_news_task.progress > 0 && (
-                <div className="text-xs text-gray-600">
-                  进度: {Math.round(status.current_news_task.progress * 100)}%
-                </div>
-              )}
-              {status.current_news_task.message && (
-                <div className="text-xs text-gray-600">
-                  {status.current_news_task.message}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      {(status.current_analysis_task || status.current_news_task) && 
+             <div className="grid md:grid-cols-2 gap-4">
+             <SchedulerTaskCard
+               icon={<Clock className="h-4 w-4" />}
+               title="分析任务"
+               task={status.current_analysis_task ?? null}
+               emptyText="当前无运行任务"
+             />
+             <SchedulerTaskCard
+               icon={<Clock className="h-4 w-4" />}
+               title="新闻任务"
+               task={status.current_news_task ?? null}
+               emptyText="当前无运行任务"
+             />
+           </div>
+      }
 
       {isTaskRunning && (
         <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded">

@@ -361,6 +361,38 @@ def run_scheduler_now_route():
     return run_scheduler_now()
 
 
+@app.get("/api/scheduler/events")
+async def scheduler_events():
+    import asyncio
+    import json
+
+    async def event_generator():
+        last_payload = None
+        # Send initial status immediately
+        status = get_scheduler_status_api()
+        try:
+            last_payload = json.dumps(status, sort_keys=True, ensure_ascii=False)
+        except Exception:
+            last_payload = None
+        if last_payload:
+            yield f"event: update\n"
+            yield f"data: {last_payload}\n\n"
+        # Periodically check for changes
+        while True:
+            await asyncio.sleep(2)
+            try:
+                status = get_scheduler_status_api()
+                payload = json.dumps(status, sort_keys=True, ensure_ascii=False)
+                if payload != last_payload:
+                    yield f"event: update\n"
+                    yield f"data: {payload}\n\n"
+                    last_payload = payload
+            except Exception:
+                # On error, continue loop; client may reconnect
+                continue
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 @app.get("/api/timeframe-analysis")
 def get_timeframe_analysis_route():
     """Get the latest timeframe analysis results"""
