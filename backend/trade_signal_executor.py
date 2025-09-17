@@ -8,7 +8,7 @@ from freqtrade_client import health, forceentry, forceexit_by_pair
 logger = logging.getLogger(__name__)
 
 
-def execute_signals(signals: List[Dict[str, Any]], dry_run: bool = False) -> Dict[str, Any]:
+def execute_signals(signals: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Execute a batch of signals against Freqtrade API.
 
     signals: List of { pair: "BTC/USDT", side: "buy"|"sell", stake_amount?: number }
@@ -40,11 +40,6 @@ def execute_signals(signals: List[Dict[str, Any]], dry_run: bool = False) -> Dic
             continue
 
         try:
-            if dry_run:
-                logger.info(f"[DRY-RUN] {side.upper()} {pair} stake={stake}")
-                executed += 1
-                continue
-
             if side == "buy":
                 if forceentry(pair, stake_amount=stake):
                     executed += 1

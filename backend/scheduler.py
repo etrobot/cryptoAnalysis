@@ -248,8 +248,8 @@ class TaskScheduler:
 
                 signals = generate_buy_sell_signals_from_latest(top_n=5, current_open_positions=held_pairs)
                 batch = signals.get("sell", []) + signals.get("buy", [])
-                # 发送信号到 Freqtrade（Freqtrade 本身处于 dry_run 配置，安全模拟交易）
-                result = execute_signals(batch, dry_run=False)
+                # 发送信号到 Freqtrade（FreqTrade自己配置了dry_run模式）
+                result = execute_signals(batch)
                 logger.info(f"Trade signals executed (sent to Freqtrade): {result}")
             except Exception as e:
                 logger.error(f"Trade signal execution failed: {e}")
@@ -384,9 +384,9 @@ class TaskScheduler:
                             continue
                         
                         # 计算连续阳线和阴线的最大值 (使用candlestick_strategy的逻辑)
-                        green_count = strategy.count_consecutive_candles(df, "green")
-                        red_count = strategy.count_consecutive_candles(df, "red")
-                        max_consecutive = max(green_count, red_count)
+                        bullish_count = strategy.count_consecutive_candles(df, "bullish")
+                        bearish_count = strategy.count_consecutive_candles(df, "bearish")
+                        max_consecutive = max(bullish_count, bearish_count)
                         
                         total_consecutive += max_consecutive
                         max_overall = max(max_overall, max_consecutive)
@@ -394,14 +394,14 @@ class TaskScheduler:
                         
                         timeframe_stats["symbols_analyzed"].append({
                             "symbol": symbol,
-                            "green_consecutive": green_count,
-                            "red_consecutive": red_count,
+                            "bullish_consecutive": bullish_count,
+                            "bearish_consecutive": bearish_count,
                             "max_consecutive": max_consecutive
                         })
                         
                         timeframe_stats["consecutive_patterns"].append(max_consecutive)
                         
-                        logger.debug(f"{symbol} {timeframe}min: {green_count} green, {red_count} red, max: {max_consecutive}")
+                        logger.debug(f"{symbol} {timeframe}min: {bullish_count} bullish, {bearish_count} bearish, max: {max_consecutive}")
                     
                     except Exception as e:
                         logger.warning(f"Failed to analyze {symbol} for {timeframe}m: {e}")
@@ -559,8 +559,8 @@ class TaskScheduler:
                         f.write(f"  币种详情:\n")
                         for symbol_data in symbols_analyzed[:3]:  # 只显示前3个
                             f.write(f"    {symbol_data.get('symbol', '')}: "
-                                   f"绿{symbol_data.get('green_consecutive', 0)} "
-                                   f"红{symbol_data.get('red_consecutive', 0)} "
+                                   f"多头{symbol_data.get('bullish_consecutive', 0)} "
+                                   f"空头{symbol_data.get('bearish_consecutive', 0)} "
                                    f"最大{symbol_data.get('max_consecutive', 0)}\n")
                         if len(symbols_analyzed) > 3:
                             f.write(f"    ... (还有{len(symbols_analyzed)-3}个币种)\n")

@@ -50,21 +50,17 @@ class CandlestickStrategy:
                     columns=["timestamp", "open", "high", "low", "close", "volume", "turnover"]
                 )
                 
-                # 转换数据类型
-                df["timestamp"] = pd.to_numeric(df["timestamp"])
+                # 批量转换数据类型
+                numeric_cols = ["timestamp", "open", "high", "low", "close", "volume"]
+                df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric)
                 df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
-                df["open"] = pd.to_numeric(df["open"])
-                df["high"] = pd.to_numeric(df["high"])
-                df["low"] = pd.to_numeric(df["low"])
-                df["close"] = pd.to_numeric(df["close"])
-                df["volume"] = pd.to_numeric(df["volume"])
                 
                 # 按时间排序(最新的在前面)
                 df = df.sort_values("timestamp", ascending=False).reset_index(drop=True)
                 
-                # 计算涨跌
-                df["is_green"] = df["close"] > df["open"]  # 阳线
-                df["is_red"] = df["close"] < df["open"]    # 阴线
+                # 计算K线类型
+                df["is_bullish"] = df["close"] > df["open"]  # 阳线/多头K线
+                df["is_bearish"] = df["close"] < df["open"]  # 阴线/空头K线
                 
                 return df
             else:
@@ -81,7 +77,7 @@ class CandlestickStrategy:
             return 0
         
         count = 0
-        column = "is_green" if candle_type == "green" else "is_red"
+        column = "is_bullish" if candle_type == "bullish" else "is_bearish"
         
         # 从最新K线开始计算连续数量
         for i in range(len(df)):
@@ -140,7 +136,7 @@ class CandlestickStrategy:
             logger.error(f"Failed to load trading symbols: {e}")
             return []
     
-    def check_pattern_three_green_then_sideways(self, df: pd.DataFrame) -> bool:
+    def check_pattern_three_bullish_then_sideways(self, df: pd.DataFrame) -> bool:
         """检查是否有连续3阳线后震荡10根K线的模式"""
         if len(df) < 13:  # 需要至少13根K线
             return False
@@ -150,48 +146,48 @@ class CandlestickStrategy:
         
         # 检查是否有连续3根阳线或阴线
         for i in range(len(recent_10) - 2):
-            if (recent_10.iloc[i]["is_green"] and 
-                recent_10.iloc[i+1]["is_green"] and 
-                recent_10.iloc[i+2]["is_green"]):
+            if (recent_10.iloc[i]["is_bullish"] and 
+                recent_10.iloc[i+1]["is_bullish"] and 
+                recent_10.iloc[i+2]["is_bullish"]):
                 return False
-            if (recent_10.iloc[i]["is_red"] and 
-                recent_10.iloc[i+1]["is_red"] and 
-                recent_10.iloc[i+2]["is_red"]):
+            if (recent_10.iloc[i]["is_bearish"] and 
+                recent_10.iloc[i+1]["is_bearish"] and 
+                recent_10.iloc[i+2]["is_bearish"]):
                 return False
         
         # 检查第11-13根K线是否为连续3阳线
-        if (df.iloc[10]["is_green"] and 
-            df.iloc[11]["is_green"] and 
-            df.iloc[12]["is_green"]):
-            logger.info("Pattern found: 3 green candles followed by 10 sideways candles")
+        if (df.iloc[10]["is_bullish"] and 
+            df.iloc[11]["is_bullish"] and 
+            df.iloc[12]["is_bullish"]):
+            logger.info("Pattern found: 3 bullish candles followed by 10 sideways candles")
             return True
         
         return False
     
-    def check_pattern_sideways_then_three_red(self, df: pd.DataFrame) -> bool:
+    def check_pattern_sideways_then_three_bearish(self, df: pd.DataFrame) -> bool:
         """检查是否有震荡10根K线后连续3阴线的模式"""
         if len(df) < 13:
             return False
         
         # 检查最新的3根K线是否为连续3阴线
-        if (df.iloc[0]["is_red"] and 
-            df.iloc[1]["is_red"] and 
-            df.iloc[2]["is_red"]):
+        if (df.iloc[0]["is_bearish"] and 
+            df.iloc[1]["is_bearish"] and 
+            df.iloc[2]["is_bearish"]):
             
             # 检查第4-13根K线是否为震荡(没有连续3根同色)
             middle_10 = df.iloc[3:13]
             
             for i in range(len(middle_10) - 2):
-                if (middle_10.iloc[i]["is_green"] and 
-                    middle_10.iloc[i+1]["is_green"] and 
-                    middle_10.iloc[i+2]["is_green"]):
+                if (middle_10.iloc[i]["is_bullish"] and 
+                    middle_10.iloc[i+1]["is_bullish"] and 
+                    middle_10.iloc[i+2]["is_bullish"]):
                     return False
-                if (middle_10.iloc[i]["is_red"] and 
-                    middle_10.iloc[i+1]["is_red"] and 
-                    middle_10.iloc[i+2]["is_red"]):
+                if (middle_10.iloc[i]["is_bearish"] and 
+                    middle_10.iloc[i+1]["is_bearish"] and 
+                    middle_10.iloc[i+2]["is_bearish"]):
                     return False
             
-            logger.info("Pattern found: 10 sideways candles followed by 3 red candles")
+            logger.info("Pattern found: 10 sideways candles followed by 3 bearish candles")
             return True
         
         return False
@@ -199,10 +195,25 @@ class CandlestickStrategy:
     def send_trade_signal(self, symbol: str, action: str, price: float, timeframe: str) -> bool:
         """发送交易信号到Freqtrade"""
         try:
-            # 这里应该调用Freqtrade API发送交易信号
-            # 由于是模拟交易，我们只记录信号
+            from freqtrade_client import forceentry, forceexit_by_pair, health
+            
+            # 检查FreqTrade API连接
+            if not health():
+                logger.error("FreqTrade API is not healthy, cannot send signal")
+                return False
+            
+            # 转换币种格式 (BTCUSDT -> BTC/USDT)
+            if "/" not in symbol:
+                if symbol.endswith("USDT"):
+                    pair = f"{symbol[:-4]}/USDT"
+                else:
+                    pair = symbol  # 如果格式不明确，保持原样
+            else:
+                pair = symbol
+            
             signal = {
                 "symbol": symbol,
+                "pair": pair,
                 "action": action,
                 "price": price,
                 "timeframe": timeframe,
@@ -210,18 +221,44 @@ class CandlestickStrategy:
                 "timestamp": datetime.now().isoformat()
             }
             
-            logger.info(f"Trade signal: {signal}")
+            logger.info(f"Sending trade signal to FreqTrade: {signal}")
             
-            # 记录活跃头寸
+            # 发送信号到FreqTrade (FreqTrade自己配置了dry_run模式)
+            success = False
             if action == "buy":
-                self.active_positions[symbol] = {
-                    "entry_price": price,
-                    "entry_time": datetime.now(),
-                    "timeframe": timeframe,
-                    "candles_count": 0
-                }
+                # 计算下单金额 (假设总资金的1/5)
+                stake_amount = None  # 让FreqTrade使用默认金额
+                success = forceentry(pair, stake_amount=stake_amount)
+                
+                if success:
+                    # 记录活跃头寸
+                    position_key = f"{symbol}_{timeframe}"
+                    self.active_positions[position_key] = {
+                        "entry_price": price,
+                        "entry_time": datetime.now(),
+                        "timeframe": timeframe,
+                        "candles_count": 0
+                    }
+                    logger.info(f"✅ BUY signal sent successfully for {pair}")
+                else:
+                    logger.error(f"❌ Failed to send BUY signal for {pair}")
+                    
+            elif action == "sell":
+                # 强制平仓该交易对的所有持仓
+                closed_count = forceexit_by_pair(pair)
+                success = closed_count > 0
+                
+                if success:
+                    # 清理本地记录的头寸
+                    position_key = f"{symbol}_{timeframe}"
+                    if position_key in self.active_positions:
+                        del self.active_positions[position_key]
+                    logger.info(f"✅ SELL signal sent successfully for {pair}, closed {closed_count} positions")
+                else:
+                    logger.warning(f"⚠️ No open positions to close for {pair}")
+                    success = True  # 没有持仓也算成功
             
-            return True
+            return success
             
         except Exception as e:
             logger.error(f"Failed to send trade signal for {symbol}: {e}")
@@ -294,14 +331,14 @@ class CandlestickStrategy:
                     
                     # 检查入场信号(如果该时间周期没有持仓)
                     if position_key not in self.active_positions:
-                        pattern1 = self.check_pattern_three_green_then_sideways(df)
-                        pattern2 = self.check_pattern_sideways_then_three_red(df)
+                        pattern1 = self.check_pattern_three_bullish_then_sideways(df)
+                        pattern2 = self.check_pattern_sideways_then_three_bearish(df)
                         
                         if pattern1 or pattern2:
                             if self.send_trade_signal(symbol, "buy", current_price, timeframe):
                                 results["signals_sent"].append({
                                     "symbol": symbol,
-                                    "pattern": "3green+10sideways" if pattern1 else "10sideways+3red",
+                                    "pattern": "3bullish+10sideways" if pattern1 else "10sideways+3bearish",
                                     "price": current_price,
                                     "timeframe": timeframe
                                 })
