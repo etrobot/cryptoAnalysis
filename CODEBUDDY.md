@@ -88,3 +88,12 @@ Polling stops when:
 6. Task status updates streamed in real-time via SSE or polling
 7. Results stored in SQLite database and delivered to frontend
 8. Communication automatically terminates on task completion
+
+## K-line Analysis Principle
+- **For Sideways Movement Detection**: Find the **longest** candle in the sideways period
+- **For Trend Movement Reference**: Find the **shortest** candle in the trend period (3 consecutive bullish/bearish candles) 
+- **Reason**: This ensures all candles in the sideways period are shorter than even the weakest momentum candle from the trend period, providing a conservative threshold for genuine consolidation
+- **Implementation Pattern**: 
+  - `sideways_max_length = max(candle_lengths_in_sideways_period)`
+  - `trend_min_length = min(candle_lengths_in_trend_period)`
+  - `is_sideways = sideways_max_length < trend_min_length`

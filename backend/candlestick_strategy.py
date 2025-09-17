@@ -136,29 +136,48 @@ class CandlestickStrategy:
             logger.error(f"Failed to load trading symbols: {e}")
             return []
     
+    def calculate_candle_length(self, open_price: float, close_price: float) -> float:
+        """计算K线长度(绝对值)"""
+        return abs(close_price - open_price)
+    
+    def is_sideways_movement(self, df: pd.DataFrame, start_idx: int, end_idx: int, reference_length: float) -> bool:
+        """检查指定区间是否为震荡走势(最长的K线短于参考长度)"""
+        if start_idx < 0 or end_idx >= len(df) or start_idx > end_idx:
+            return False
+        
+        # 找到该区间内最长的K线
+        max_length = 0.0
+        for i in range(start_idx, end_idx + 1):
+            candle_length = self.calculate_candle_length(df.iloc[i]["open"], df.iloc[i]["close"])
+            if candle_length > max_length:
+                max_length = candle_length
+        
+        # 如果最长的K线短于参考长度，则为震荡走势
+        return max_length < reference_length
+    
     def check_pattern_three_bullish_then_sideways(self, df: pd.DataFrame) -> bool:
         """检查是否有连续3阳线后震荡10根K线的模式"""
         if len(df) < 13:  # 需要至少13根K线
             return False
         
-        # 检查最新的10根K线是否为震荡(没有连续3根同色)
-        recent_10 = df.head(10)
-        
-        # 检查是否有连续3根阳线或阴线
-        for i in range(len(recent_10) - 2):
-            if (recent_10.iloc[i]["is_bullish"] and 
-                recent_10.iloc[i+1]["is_bullish"] and 
-                recent_10.iloc[i+2]["is_bullish"]):
-                return False
-            if (recent_10.iloc[i]["is_bearish"] and 
-                recent_10.iloc[i+1]["is_bearish"] and 
-                recent_10.iloc[i+2]["is_bearish"]):
-                return False
-        
         # 检查第11-13根K线是否为连续3阳线
-        if (df.iloc[10]["is_bullish"] and 
-            df.iloc[11]["is_bullish"] and 
-            df.iloc[12]["is_bullish"]):
+        if not (df.iloc[10]["is_bullish"] and 
+                df.iloc[11]["is_bullish"] and 
+                df.iloc[12]["is_bullish"]):
+            return False
+        
+        # 计算三连阳中最短的K线长度作为参考
+        min_length = float('inf')
+        for i in range(10, 13):
+            candle_length = self.calculate_candle_length(df.iloc[i]["open"], df.iloc[i]["close"])
+            if candle_length < min_length:
+                min_length = candle_length
+        reference_length = min_length
+        
+        # 检查最新的10根K线是否为震荡走势(最长的K线短于三连阳中最长的K线)
+        is_sideways = self.is_sideways_movement(df, 0, 9, reference_length)
+        
+        if is_sideways:
             logger.info("Pattern found: 3 bullish candles followed by 10 sideways candles")
             return True
         
@@ -170,23 +189,23 @@ class CandlestickStrategy:
             return False
         
         # 检查最新的3根K线是否为连续3阴线
-        if (df.iloc[0]["is_bearish"] and 
-            df.iloc[1]["is_bearish"] and 
-            df.iloc[2]["is_bearish"]):
-            
-            # 检查第4-13根K线是否为震荡(没有连续3根同色)
-            middle_10 = df.iloc[3:13]
-            
-            for i in range(len(middle_10) - 2):
-                if (middle_10.iloc[i]["is_bullish"] and 
-                    middle_10.iloc[i+1]["is_bullish"] and 
-                    middle_10.iloc[i+2]["is_bullish"]):
-                    return False
-                if (middle_10.iloc[i]["is_bearish"] and 
-                    middle_10.iloc[i+1]["is_bearish"] and 
-                    middle_10.iloc[i+2]["is_bearish"]):
-                    return False
-            
+        if not (df.iloc[0]["is_bearish"] and 
+                df.iloc[1]["is_bearish"] and 
+                df.iloc[2]["is_bearish"]):
+            return False
+        
+        # 计算三连阴中最短的K线长度作为参考
+        min_length = float('inf')
+        for i in range(0, 3):
+            candle_length = self.calculate_candle_length(df.iloc[i]["open"], df.iloc[i]["close"])
+            if candle_length < min_length:
+                min_length = candle_length
+        reference_length = min_length
+        
+        # 检查第4-13根K线是否为震荡走势(最长的K线短于三连阴中最长的K线)
+        is_sideways = self.is_sideways_movement(df, 3, 12, reference_length)
+        
+        if is_sideways:
             logger.info("Pattern found: 10 sideways candles followed by 3 bearish candles")
             return True
         
