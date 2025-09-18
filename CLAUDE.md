@@ -98,6 +98,16 @@ Limited formal testing. Manual smoke tests via scripts/smoke_test.sh and factor 
    - Plugin architecture for technical analysis factors
    - Dynamic factor loading and computation
    - Support for configurable window sizes
+   - Sideways Movement Detection Logic:
+     - **For Sideways Movement Detection**: Find the **longest** candle in the sideways period
+     - **For Trend Movement Reference**: Find the **shortest** candle in the trend period (3 consecutive bullish/bearish candles)
+     - **Reason**: This ensures all candles in the sideways period are shorter than even the weakest momentum candle from the trend period, providing a conservative threshold for genuine consolidation
+     - **Implementation Pattern**:
+       ```python
+       sideways_max_length = max(candle_lengths_in_sideways_period)
+       trend_min_length = min(candle_lengths_in_trend_period)
+       is_sideways = sideways_max_length < trend_min_length
+       ```
 
 6. **Trading Integration** (`backend/freqtrade_client.py`, `backend/trade_signal_executor.py`):
    - FreqTrade API client with authentication
