@@ -138,14 +138,14 @@ def health(token: Optional[str] = None) -> bool:
         auth = _get_auth()
         # Try with auth first if available
         if auth:
-            resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT)
+            resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT, proxies=None)
             if resp.ok:
                 return True
             # If unauthorized, fall back to unauthenticated ping (some setups allow it)
             if resp.status_code not in (401, 403):
                 return False
         # Try without auth as fallback
-        resp2 = requests.get(url, timeout=REQUEST_TIMEOUT)
+        resp2 = requests.get(url, timeout=REQUEST_TIMEOUT, proxies=None)
         return resp2.ok
     except Exception as e:
         logger.warning(f"Freqtrade API health check failed: {e}")
@@ -161,7 +161,7 @@ def list_open_trades(token: Optional[str] = None) -> List[Dict[str, Any]]:
             return []
             
         url = _api_url("/status")
-        resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT)
+        resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT, proxies=None)
         resp.raise_for_status()
         
         data = resp.json()
@@ -192,7 +192,7 @@ def forceentry(pair: str, stake_amount: Optional[float] = None, token: Optional[
         for ep in endpoints:
             try:
                 url = _api_url(ep)
-                resp = requests.post(url, json=payload, auth=auth, timeout=REQUEST_TIMEOUT)
+                resp = requests.post(url, json=payload, auth=auth, timeout=REQUEST_TIMEOUT, proxies=None)
                 if resp.ok:
                     logger.info(f"Force buy sent for {pair} via {ep}")
                     return True
@@ -223,7 +223,7 @@ def forceexit_by_pair(pair: str, token: Optional[str] = None) -> int:
     # Try direct forcesell by pair (newer API), fallback to closing by trade id
     try:
         url = _api_url("/forcesell")
-        resp = requests.post(url, json={"pair": pair}, auth=auth, timeout=REQUEST_TIMEOUT)
+        resp = requests.post(url, json={"pair": pair}, auth=auth, timeout=REQUEST_TIMEOUT, proxies=None)
         if resp.ok:
             logger.info(f"Force sell sent for pair {pair}")
             return 1
@@ -245,7 +245,7 @@ def forceexit_by_pair(pair: str, token: Optional[str] = None) -> int:
                 for ep in (f"/forcesell/{trade_id}", f"/forceexit/{trade_id}"):
                     try:
                         url = _api_url(ep)
-                        resp = requests.post(url, auth=auth, timeout=REQUEST_TIMEOUT)
+                        resp = requests.post(url, auth=auth, timeout=REQUEST_TIMEOUT, proxies=None)
                         if resp.ok:
                             count += 1
                             logger.info(f"Force sell/exit succeeded for trade {trade_id} via {ep}")

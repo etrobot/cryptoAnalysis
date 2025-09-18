@@ -16,7 +16,7 @@ services:
       # Proxy settings (configured via .env file)
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
-      - NO_PROXY=${NO_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,freqtrade-bot,crypto-trader}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.crypto-trader.rule=Host(`btc.subx.fun`)"
@@ -25,6 +25,7 @@ services:
       - "traefik.http.services.crypto-trader.loadbalancer.server.port=8000"
     networks:
       - traefik
+      - default
 
   freqtrade:
     image: freqtradeorg/freqtrade:stable
@@ -42,7 +43,7 @@ services:
       # Proxy settings (configured via .env file)
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
-      - NO_PROXY=${NO_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,freqtrade-bot,crypto-trader}
     ports:
       - "6677:8080"
     labels:
@@ -53,6 +54,7 @@ services:
       - "traefik.http.services.freqtrade.loadbalancer.server.port=8080"
     networks:
       - traefik
+      - default
 
 networks:
   traefik:
