@@ -66,6 +66,7 @@ class TaskScheduler:
             self.scheduler.start()
             
             # 启动后立即测试一次最小底仓下单（仅启动时执行一次）
+            logger.info("Scheduling startup test position to run in 3 seconds...")
             self.scheduler.add_job(
                 func=self._startup_test_position,
                 trigger=DateTrigger(run_date=datetime.now(timezone.utc) + timedelta(seconds=3)),
@@ -73,6 +74,7 @@ class TaskScheduler:
                 name="Startup Test Position",
                 replace_existing=True
             )
+            logger.info("Startup test position job scheduled successfully")
             self.is_running = True
             logger.info("Task scheduler started successfully")
         except Exception as e:
@@ -634,33 +636,49 @@ class TaskScheduler:
                         pair_to_close = existing_pairs[0]
                     
                     if pair_to_close:
-                        logger.info(f"Closing existing position: {pair_to_close}")
-                        closed_count = forceexit_by_pair(pair_to_close)
-                        
-                        if closed_count > 0:
-                            logger.info(f"Successfully closed {closed_count} position(s) for {pair_to_close}")
+                        logger.info(f"Attempting to close position: {pair_to_close}")
+                        try:
+                            closed_count = forceexit_by_pair(pair_to_close)
+                            logger.info(f"forceexit_by_pair returned: {closed_count} position(s) closed")
                             
-                            # 等待一下让平仓完成
-                            import time
-                            time.sleep(2)
-                            
-                            # 重试下单
-                            logger.info(f"Retrying minimal test position: {selected_pair}")
-                            retry_success = forceentry(selected_pair, stake_amount=minimal_stake)
-                            
-                            if retry_success:
-                                logger.info(f"✅ Minimal test position placed successfully after retry: {selected_pair}")
+                            if closed_count > 0:
+                                logger.info(f"✅ Successfully closed {closed_count} position(s) for {pair_to_close}")
+                                
+                                # 等待一下让平仓完成
+                                import time
+                                wait_time = 5
+                                logger.info(f"Waiting {wait_time} seconds for position closure to complete...")
+                                time.sleep(wait_time)
+                                
+                                # 重试下测试单
+                                logger.info(f"Retrying to place minimal test position: {selected_pair}")
+                                try:
+                                    retry_success = forceentry(selected_pair, stake_amount=minimal_stake)
+                                    logger.info(f"forceentry returned: {retry_success}")
+                                    
+                                    if retry_success:
+                                        logger.info(f"✅ Minimal test position placed successfully after retry: {selected_pair}")
+                                    else:
+                                        logger.warning(f"❌ Retry failed for minimal test position: {selected_pair} (forceentry returned False)")
+                                except Exception as entry_error:
+                                    logger.error(f"❌ Error in forceentry call: {str(entry_error)}", exc_info=True)
+                                    raise
                             else:
-                                logger.warning(f"❌ Retry failed for minimal test position: {selected_pair}")
+                                logger.warning(f"❌ No positions were closed for {pair_to_close} (forceexit_by_pair returned 0)")
+                        except Exception as exit_error:
+                            logger.error(f"❌ Error in forceexit_by_pair call: {str(exit_error)}", exc_info=True)
+                            raise
                         else:
                             logger.warning(f"Failed to close existing position: {pair_to_close}")
-                
         except Exception as e:
-            logger.error(f"Error placing minimal test position: {e}")
+            logger.error(f"Error placing minimal test position: {e}", exc_info=True)
+            raise
+        finally:
+            logger.info("=== Completed startup test position placement ===")
 
     def _startup_test_position(self):
         """启动时测试一次最小底仓下单（仅启动时执行）"""
-        logger.info("=== Startup Test: Testing minimal position placement ===")
+        logger.info("=== Starting startup test position placement ===")
         try:
             # 调用下单测试方法
             self._place_minimal_test_position()
