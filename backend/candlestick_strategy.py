@@ -316,12 +316,9 @@ class CandlestickStrategy:
             "selected_timeframes": selected_timeframes,
             "signals_sent": [],
             "positions_closed": [],
-            "base_positions_created": [],
             "timeframe_analysis": {}
         }
         
-        # 首先建立底仓逻辑
-        self._establish_base_positions(symbols, results)
         
         for i, symbol in enumerate(symbols):
             if task_id:
@@ -356,17 +353,6 @@ class CandlestickStrategy:
                             if position_key in self.active_positions:
                                 del self.active_positions[position_key]
                     
-                    # 检查底仓平仓条件
-                    if self._should_close_base_position(base_position_key, current_price):
-                        if self.send_trade_signal(symbol, "sell", current_price, f"{timeframe}_base"):
-                            results["positions_closed"].append({
-                                "symbol": symbol,
-                                "price": current_price,
-                                "timeframe": f"{timeframe}_base",
-                                "type": "base_position"
-                            })
-                            if base_position_key in self.active_positions:
-                                del self.active_positions[base_position_key]
                     
                     # 检查入场信号(如果该时间周期没有持仓)
                     if position_key not in self.active_positions:
@@ -376,7 +362,7 @@ class CandlestickStrategy:
                         
                         # 如果严格形态未触发，尝试宽松的入场条件
                         if not (pattern1 or pattern2):
-                            simple_bull = self.check_simple_bullish(df)
+                            simple_bull = len(df) >= 2 and df.iloc[0]["is_bullish"] and df.iloc[1]["is_bullish"]
                         
                         if pattern1 or simple_bull:
                             if self.send_trade_signal(symbol, "buy", current_price, timeframe):
@@ -397,15 +383,12 @@ class CandlestickStrategy:
                                 }
                     
                     # 记录该时间周期的分析结果
-                    base_position_key = f"{symbol}_{timeframe}_base"
                     has_strategy_position = position_key in self.active_positions
-                    has_base_position = base_position_key in self.active_positions
                     pattern_detected = (pattern1 or simple_bull) if not has_strategy_position else False
                     
                     symbol_results[timeframe] = {
                         "has_strategy_position": has_strategy_position,
-                        "has_base_position": has_base_position,
-                        "has_position": has_strategy_position or has_base_position,
+                        "has_position": has_strategy_position,
                         "pattern_detected": pattern_detected
                     }
                 

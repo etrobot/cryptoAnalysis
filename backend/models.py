@@ -31,6 +31,7 @@ class Task(BaseModel):
     selected_factors: Optional[List[str]] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    version: int = 0  # For SSE version tracking
 
 
 class RunRequest(BaseModel):
