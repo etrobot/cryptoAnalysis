@@ -61,17 +61,7 @@ class TaskScheduler:
                 replace_existing=True
             )
             
-            # 立即触发一次每日任务（延迟几秒，避免与启动竞争），便于部署后立即产生信号
-            try:
-                self.scheduler.add_job(
-                    func=self._run_daily_tasks,
-                    trigger=DateTrigger(run_date=datetime.now(timezone.utc) + timedelta(seconds=5)),
-                    id="bootstrap_daily_run",
-                    name="Bootstrap Daily Run",
-                    replace_existing=True
-                )
-            except Exception as e:
-                logger.warning(f"Failed to schedule bootstrap daily run: {e}")
+            # Bootstrap startup run removed - use manual trigger instead
             
             self.scheduler.start()
             self.is_running = True
@@ -456,45 +446,48 @@ class TaskScheduler:
             }
 
     def _select_best_timeframes_for_trading(self, timeframe_results: Dict) -> List[str]:
-        """选择最短的4个表现较好的时间周期用于交易"""
-        # 计算所有时间周期的评分
-        timeframe_scores = []
-        for timeframe, stats in timeframe_results.items():
-            score = stats.get("trading_score", 0)
-            # 只选择有一定表现的时间周期（评分 > 1.0）
-            if score > 1.0:
-                # 提取数字部分用于排序（例如 "5m" -> 5）
-                timeframe_minutes = int(timeframe.replace('m', ''))
-                timeframe_scores.append((timeframe, score, timeframe_minutes))
+        """选择过去100根K线中阳线和阴线数量最接近的4个时间周期"""
+        from candlestick_strategy import CandlestickStrategy
+        import pandas as pd
         
-        if not timeframe_scores:
-            # 如果没有符合条件的，选择默认的较短周期
-            return ["3m", "5m", "10m", "15m"]
+        # 获取一个交易对用于分析（这里使用BTCUSDT作为基准）
+        symbol = "BTCUSDT"
+        strategy = CandlestickStrategy()
         
-        # 按评分降序排序，然后选择其中最短的4个
-        timeframe_scores.sort(key=lambda x: x[1], reverse=True)  # 按评分排序
+        # 存储每个时间周期的阳线和阴线数量差异
+        timeframe_diffs = []
         
-        # 从高评分中选择最短的4个
-        selected = []
-        available_timeframes = [item for item in timeframe_scores if item[1] > 1.0]
+        for timeframe in timeframe_results.keys():
+            # 获取过去100根K线数据
+            df = strategy.get_kline_data(symbol, timeframe, limit=100)
+            
+            if not df.empty:
+                # 计算阳线和阴线数量
+                bullish_count = df['is_bullish'].sum()
+                bearish_count = df['is_bearish'].sum()
+                
+                # 计算阳线和阴线数量的绝对差异
+                diff = abs(bullish_count - bearish_count)
+                
+                # 存储差异和时间周期
+                timeframe_diffs.append((timeframe, diff, bullish_count, bearish_count))
         
-        # 按时间长度排序，选择最短的4个有效时间周期
-        available_timeframes.sort(key=lambda x: x[2])  # 按分钟数排序
+        if not timeframe_diffs:
+            # 如果没有获取到数据，返回默认时间周期
+            return ["5m", "15m", "30m", "1h"]
         
-        for timeframe, score, minutes in available_timeframes[:4]:
-            selected.append(timeframe)
+        # 按差异从小到大排序（差异越小，阳线和阴线数量越接近）
+        timeframe_diffs.sort(key=lambda x: x[1])
         
-        # 确保至少有4个时间周期
-        default_timeframes = ["3m", "5m", "10m", "15m"]
-        while len(selected) < 4:
-            for tf in default_timeframes:
-                if tf not in selected:
-                    selected.append(tf)
-                    if len(selected) >= 4:
-                        break
+        # 选择差异最小的4个时间周期
+        selected_timeframes = [item[0] for item in timeframe_diffs[:4]]
         
-        logger.info(f"Selected timeframes for trading: {selected[:4]}")
-        return selected[:4]
+        # 记录日志
+        logger.info(f"Selected timeframes based on balanced candle counts: {selected_timeframes}")
+        for tf, diff, bull, bear in timeframe_diffs[:4]:
+            logger.info(f"{tf}: {bull} bullish, {bear} bearish, diff={diff}")
+            
+        return selected_timeframes
 
     def _generate_timeframe_recommendation_from_consecutive(self, timeframe_results: Dict, best_timeframe: str) -> str:
         """基于连续K线分析生成时间周期推荐说明"""

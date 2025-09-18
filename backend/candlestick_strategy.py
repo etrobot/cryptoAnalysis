@@ -165,7 +165,7 @@ class CandlestickStrategy:
         return False
     
     def check_pattern_sideways_then_three_bearish(self, df: pd.DataFrame) -> bool:
-        """检查是否有震荡10根K线后连续3阴线的模式"""
+        """检查是否有震荡10根K线后连续3阴线的模式（用于做空/减仓提示，当前策略仍仅做多）。"""
         if len(df) < 13:
             return False
         
@@ -187,7 +187,143 @@ class CandlestickStrategy:
                     middle_10.iloc[i+2]["is_bearish"]):
                     return False
             
-            logger.info("Pattern found: 10 sideways candles followed by 3 bearish candles")
+            logger.info("Pattern found: 10 sideways candles followed by 3 bearish candles (bearish)")
+            return True
+        
+        return False
+
+    def check_simple_bullish(self, df: pd.DataFrame) -> bool:
+        """宽松的入场条件：最近2根K线均为阳线。用于在严格形态未触发时的兜底信号。"""
+        if len(df) < 2:
+            return False
+        return bool(df.iloc[0]["is_bullish"]) and bool(df.iloc[1]["is_bullish"])
+    
+    def _establish_base_positions(self, symbols: List[str], results: Dict):
+        """建立底仓：为每个币种在最短时间周期建立基础持仓"""
+        try:
+            from freqtrade_client import list_open_trades, health
+            
+            # 检查Freqtrade连接
+            if not health():
+                logger.warning("Freqtrade API not healthy, skipping base position establishment")
+                return
+            
+            # 获取当前持仓
+            open_trades = list_open_trades()
+            held_pairs = {t.get("pair") for t in open_trades if t.get("pair")}
+            
+            logger.info(f"Current open positions: {len(held_pairs)} pairs")
+            
+            # 为每个币种建立底仓（如果尚未持有）
+            base_timeframe = min(self.timeframes, key=int)  # 使用最短时间周期作为底仓周期
+            max_base_positions = min(3, len(symbols))  # 最多建立3个底仓，避免过度分散
+            
+            created_count = 0
+            for symbol in symbols[:max_base_positions]:
+                # 转换币种格式
+                if "/" not in symbol:
+                    if symbol.endswith("USDT"):
+                        pair = f"{symbol[:-4]}/USDT"
+                    else:
+                        pair = symbol
+                else:
+                    pair = symbol
+                
+                # 检查是否已有持仓
+                if pair in held_pairs:
+                    logger.info(f"Base position already exists for {pair}, skipping")
+                    continue
+                
+                # 检查该币种在底仓时间周期是否已有策略持仓
+                position_key = f"{symbol}_{base_timeframe}"
+                if position_key in self.active_positions:
+                    logger.info(f"Strategy position already exists for {symbol} on {base_timeframe}m, skipping base position")
+                    continue
+                
+                # 获取当前价格
+                try:
+                    df = self.get_kline_data(symbol, base_timeframe, limit=5)
+                    if df.empty:
+                        logger.warning(f"No price data for {symbol}, skipping base position")
+                        continue
+                    
+                    current_price = float(df.iloc[0]["close"])
+                    
+                    # 建立底仓
+                    if self.send_trade_signal(symbol, "buy", current_price, f"{base_timeframe}_base"):
+                        results["base_positions_created"].append({
+                            "symbol": symbol,
+                            "pair": pair,
+                            "price": current_price,
+                            "timeframe": f"{base_timeframe}_base",
+                            "type": "base_position"
+                        })
+                        
+                        # 记录底仓持仓（使用特殊标记区分底仓和策略持仓）
+                        base_position_key = f"{symbol}_{base_timeframe}_base"
+                        self.active_positions[base_position_key] = {
+                            "entry_price": current_price,
+                            "entry_time": datetime.now(),
+                            "timeframe": f"{base_timeframe}_base",
+                            "position_type": "base",
+                            "candles_count": 0
+                        }
+                        
+                        created_count += 1
+                        logger.info(f"✅ Base position created for {symbol} at {current_price} on {base_timeframe}m")
+                        
+                        # 限制同时建立的底仓数量，避免短时间内大量下单
+                        if created_count >= 2:
+                            logger.info("Reached maximum base positions for this round, stopping")
+                            break
+                    else:
+                        logger.warning(f"Failed to create base position for {symbol}")
+                        
+                except Exception as e:
+                    logger.error(f"Error creating base position for {symbol}: {e}")
+                    continue
+            
+            if created_count > 0:
+                logger.info(f"Base position establishment completed: {created_count} positions created")
+            else:
+                logger.info("No new base positions needed")
+                
+        except Exception as e:
+            logger.error(f"Error in base position establishment: {e}")
+    
+    def _should_close_base_position(self, position_key: str, current_price: float) -> bool:
+        """检查底仓是否应该平仓（更保守的策略）"""
+        if position_key not in self.active_positions:
+            return False
+        
+        position = self.active_positions[position_key]
+        
+        # 只处理底仓
+        if position.get("position_type") != "base":
+            return False
+        
+        entry_price = position["entry_price"]
+        entry_time = position["entry_time"]
+        
+        # 计算收益率
+        profit_rate = (current_price - entry_price) / entry_price
+        
+        # 计算持仓时间（小时）
+        holding_hours = (datetime.now() - entry_time).total_seconds() / 3600
+        
+        # 底仓平仓条件（更保守）：
+        # 1. 盈利超过8%时获利了结
+        # 2. 亏损超过15%时止损（给更大容忍度）
+        # 3. 持仓超过48小时时平仓（避免长期占用资金）
+        
+        if profit_rate > 0.08:
+            logger.info(f"Base position {position_key} profit target reached: {profit_rate:.2%}")
+            return True
+        elif profit_rate < -0.15:
+            logger.info(f"Base position {position_key} stop loss triggered: {profit_rate:.2%}")
+            return True
+        elif holding_hours > 48:
+            logger.info(f"Base position {position_key} holding time limit reached: {holding_hours:.1f}h")
             return True
         
         return False
@@ -297,8 +433,12 @@ class CandlestickStrategy:
             "selected_timeframes": selected_timeframes,
             "signals_sent": [],
             "positions_closed": [],
+            "base_positions_created": [],
             "timeframe_analysis": {}
         }
+        
+        # 首先建立底仓逻辑
+        self._establish_base_positions(symbols, results)
         
         for i, symbol in enumerate(symbols):
             if task_id:
@@ -319,41 +459,71 @@ class CandlestickStrategy:
                     
                     # 检查是否已有持仓需要平仓
                     position_key = f"{symbol}_{timeframe}"
+                    base_position_key = f"{symbol}_{timeframe}_base"
+                    
+                    # 检查策略持仓平仓条件
                     if self.check_exit_conditions(position_key, current_price):
                         if self.send_trade_signal(symbol, "sell", current_price, timeframe):
                             results["positions_closed"].append({
                                 "symbol": symbol,
                                 "price": current_price,
-                                "timeframe": timeframe
+                                "timeframe": timeframe,
+                                "type": "strategy_position"
                             })
                             if position_key in self.active_positions:
                                 del self.active_positions[position_key]
+                    
+                    # 检查底仓平仓条件
+                    if self._should_close_base_position(base_position_key, current_price):
+                        if self.send_trade_signal(symbol, "sell", current_price, f"{timeframe}_base"):
+                            results["positions_closed"].append({
+                                "symbol": symbol,
+                                "price": current_price,
+                                "timeframe": f"{timeframe}_base",
+                                "type": "base_position"
+                            })
+                            if base_position_key in self.active_positions:
+                                del self.active_positions[base_position_key]
                     
                     # 检查入场信号(如果该时间周期没有持仓)
                     if position_key not in self.active_positions:
                         pattern1 = self.check_pattern_three_bullish_then_sideways(df)
                         pattern2 = self.check_pattern_sideways_then_three_bearish(df)
+                        simple_bull = False
                         
-                        if pattern1 or pattern2:
+                        # 如果严格形态未触发，尝试宽松的入场条件
+                        if not (pattern1 or pattern2):
+                            simple_bull = self.check_simple_bullish(df)
+                        
+                        if pattern1 or simple_bull:
                             if self.send_trade_signal(symbol, "buy", current_price, timeframe):
                                 results["signals_sent"].append({
                                     "symbol": symbol,
-                                    "pattern": "3bullish+10sideways" if pattern1 else "10sideways+3bearish",
+                                    "pattern": "3bullish+10sideways" if pattern1 else "2bullish_recent",
                                     "price": current_price,
-                                    "timeframe": timeframe
+                                    "timeframe": timeframe,
+                                    "type": "strategy_position"
                                 })
                                 # 使用组合键记录持仓
                                 self.active_positions[position_key] = {
                                     "entry_price": current_price,
                                     "entry_time": datetime.now(),
                                     "timeframe": timeframe,
+                                    "position_type": "strategy",
                                     "candles_count": 0
                                 }
                     
                     # 记录该时间周期的分析结果
+                    base_position_key = f"{symbol}_{timeframe}_base"
+                    has_strategy_position = position_key in self.active_positions
+                    has_base_position = base_position_key in self.active_positions
+                    pattern_detected = (pattern1 or simple_bull) if not has_strategy_position else False
+                    
                     symbol_results[timeframe] = {
-                        "has_position": position_key in self.active_positions,
-                        "pattern_detected": pattern1 or pattern2 if position_key not in self.active_positions else False
+                        "has_strategy_position": has_strategy_position,
+                        "has_base_position": has_base_position,
+                        "has_position": has_strategy_position or has_base_position,
+                        "pattern_detected": pattern_detected
                     }
                 
                 results["timeframe_analysis"][symbol] = symbol_results

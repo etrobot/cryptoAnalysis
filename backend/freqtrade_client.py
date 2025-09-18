@@ -29,10 +29,49 @@ def _get_headers(token: Optional[str]) -> Dict[str, str]:
     return headers
 
 
+def _load_creds_from_config() -> Optional[tuple]:
+    """Try to load API basic-auth credentials from a Freqtrade config file.
+    Searches common paths mounted into the app container.
+    Returns (username, password) or None.
+    """
+    import json
+    import os
+
+    candidates = [
+        os.getenv("FREQTRADE_CONFIG_PATH", "/app/user_data/config_external_signals.json"),
+        os.path.join(os.getcwd(), "user_data", "config_external_signals.json"),
+        os.path.join(os.getcwd(), "user_data", "config.json"),
+        os.path.join(os.getcwd(), "user_data", "config_external_signals.json.backup"),
+    ]
+    for path in candidates:
+        try:
+            if not path:
+                continue
+            if not os.path.exists(path):
+                continue
+            with open(path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            api = cfg.get("api_server") or {}
+            user = api.get("username")
+            pwd = api.get("password")
+            if user and pwd:
+                logger.info(f"Loaded Freqtrade API credentials from {path}")
+                return (user, pwd)
+        except Exception as e:
+            logger.warning(f"Failed reading Freqtrade config at {path}: {e}")
+    return None
+
+
 def _get_auth() -> Optional[tuple]:
     """Get basic authentication credentials."""
+    global API_USERNAME, API_PASSWORD
     if API_USERNAME and API_PASSWORD:
         return (API_USERNAME, API_PASSWORD)
+    # Fallback: try to load from mounted Freqtrade config
+    creds = _load_creds_from_config()
+    if creds:
+        API_USERNAME, API_PASSWORD = creds  # cache for later
+        return creds
     return None
 
 
@@ -95,14 +134,19 @@ def refresh_token() -> Optional[str]:
 def health(token: Optional[str] = None) -> bool:
     """Check if Freqtrade API is healthy."""
     try:
-        auth = _get_auth()
-        if not auth:
-            logger.error("No Freqtrade API credentials available")
-            return False
-            
         url = _api_url("/ping")
-        resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT)
-        return resp.ok
+        auth = _get_auth()
+        # Try with auth first if available
+        if auth:
+            resp = requests.get(url, auth=auth, timeout=REQUEST_TIMEOUT)
+            if resp.ok:
+                return True
+            # If unauthorized, fall back to unauthenticated ping (some setups allow it)
+            if resp.status_code not in (401, 403):
+                return False
+        # Try without auth as fallback
+        resp2 = requests.get(url, timeout=REQUEST_TIMEOUT)
+        return resp2.ok
     except Exception as e:
         logger.warning(f"Freqtrade API health check failed: {e}")
         return False
@@ -130,7 +174,9 @@ def list_open_trades(token: Optional[str] = None) -> List[Dict[str, Any]]:
 
 
 def forceentry(pair: str, stake_amount: Optional[float] = None, token: Optional[str] = None) -> bool:
-    """Force entry for a trading pair."""
+    """Force entry (buy) for a trading pair.
+    Tries multiple Freqtrade API endpoints for compatibility across versions.
+    """
     payload: Dict[str, Any] = {"pair": pair}
     if stake_amount is not None:
         payload["stake_amount"] = stake_amount
@@ -139,16 +185,31 @@ def forceentry(pair: str, stake_amount: Optional[float] = None, token: Optional[
         if not auth:
             logger.error("No Freqtrade API credentials available")
             return False
-            
-        url = _api_url("/forceenter")
-        resp = requests.post(url, json=payload, auth=auth, timeout=REQUEST_TIMEOUT)
-        
-        if resp.ok:
-            logger.info(f"Force entry sent for {pair}")
-            return True
-        logger.error(f"Force entry failed for {pair}: {resp.status_code} {resp.text}")
+
+        # Preferred endpoint
+        endpoints = ["/forcebuy", "/forceenter"]
+        last_err = None
+        for ep in endpoints:
+            try:
+                url = _api_url(ep)
+                resp = requests.post(url, json=payload, auth=auth, timeout=REQUEST_TIMEOUT)
+                if resp.ok:
+                    logger.info(f"Force buy sent for {pair} via {ep}")
+                    return True
+                else:
+                    # If 404, try next endpoint
+                    if resp.status_code == 404:
+                        last_err = f"{resp.status_code} {resp.text}"
+                        continue
+                    logger.error(f"Force buy failed for {pair} via {ep}: {resp.status_code} {resp.text}")
+                    last_err = f"{resp.status_code} {resp.text}"
+            except Exception as ex:
+                last_err = str(ex)
+                logger.warning(f"Force buy attempt via {ep} raised: {ex}")
+        if last_err:
+            logger.error(f"Force buy failed for {pair}: {last_err}")
     except Exception as e:
-        logger.error(f"Force entry exception for {pair}: {e}")
+        logger.error(f"Force buy exception for {pair}: {e}")
     return False
 
 
@@ -158,7 +219,20 @@ def forceexit_by_pair(pair: str, token: Optional[str] = None) -> int:
     if not auth:
         logger.error("No Freqtrade API credentials available")
         return 0
-        
+
+    # Try direct forcesell by pair (newer API), fallback to closing by trade id
+    try:
+        url = _api_url("/forcesell")
+        resp = requests.post(url, json={"pair": pair}, auth=auth, timeout=REQUEST_TIMEOUT)
+        if resp.ok:
+            logger.info(f"Force sell sent for pair {pair}")
+            return 1
+        elif resp.status_code != 404:
+            logger.error(f"Force sell failed for {pair}: {resp.status_code} {resp.text}")
+    except Exception as e:
+        logger.warning(f"Force sell by pair failed for {pair}: {e}")
+
+    # Fallback: iterate open trades and close those matching the pair
     trades = list_open_trades(token)
     count = 0
     for t in trades:
@@ -167,13 +241,21 @@ def forceexit_by_pair(pair: str, token: Optional[str] = None) -> int:
             if trade_id is None:
                 continue
             try:
-                url = _api_url(f"/forceexit/{trade_id}")
-                resp = requests.post(url, auth=auth, timeout=REQUEST_TIMEOUT)
-                
-                if resp.ok:
-                    count += 1
-                else:
-                    logger.error(f"Force exit failed for trade {trade_id} ({pair}): {resp.status_code} {resp.text}")
+                # Try both endpoints for compatibility
+                for ep in (f"/forcesell/{trade_id}", f"/forceexit/{trade_id}"):
+                    try:
+                        url = _api_url(ep)
+                        resp = requests.post(url, auth=auth, timeout=REQUEST_TIMEOUT)
+                        if resp.ok:
+                            count += 1
+                            logger.info(f"Force sell/exit succeeded for trade {trade_id} via {ep}")
+                            break
+                        elif resp.status_code == 404:
+                            continue
+                        else:
+                            logger.error(f"Force sell/exit failed for trade {trade_id} via {ep}: {resp.status_code} {resp.text}")
+                    except Exception as e2:
+                        logger.warning(f"Force sell/exit attempt via {ep} raised: {e2}")
             except Exception as e:
                 logger.error(f"Force exit exception for trade {trade_id} ({pair}): {e}")
     return count
