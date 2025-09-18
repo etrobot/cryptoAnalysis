@@ -42,7 +42,30 @@ generate_api_credentials() {
     echo "  WebSocket Token: ${WS_TOKEN}"
 }
 
-info "🚀 Starting deployment of Quant Dashboard..."
+# Deployment mode selection
+DEPLOY_MODE=${1:-"all"}
+
+case "$DEPLOY_MODE" in
+  "all")
+    COMPOSE_FILE="docker-compose.yml"
+    info "🚀 Starting full deployment (crypto-trader + freqtrade)..."
+    ;;
+  "app")
+    COMPOSE_FILE="docker-compose.app.yml"
+    info "🚀 Starting crypto-trader only deployment..."
+    ;;
+  "freqtrade")
+    COMPOSE_FILE="docker-compose.freqtrade.yml"
+    info "🚀 Starting freqtrade only deployment..."
+    ;;
+  *)
+    error "❌ Invalid deployment mode. Usage:"
+    echo "  ./deploy.sh all         # Deploy both services (default)"
+    echo "  ./deploy.sh app         # Deploy crypto-trader only"
+    echo "  ./deploy.sh freqtrade   # Deploy freqtrade only"
+    exit 1
+    ;;
+esac
 
 # Create necessary directories
 info "📁 Creating directories..."
@@ -197,6 +220,24 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         info "✅ Using newly generated secure credentials"
     fi
 
+    # Get Freqtrade API URL for app-only deployment
+    if [ "$DEPLOY_MODE" = "app" ]; then
+        echo ""
+        info "🔗 External Freqtrade Configuration"
+        echo "Common options:"
+        echo "  - http://host.docker.internal:6677  (if Freqtrade runs on host)"
+        echo "  - http://192.168.1.100:6677         (remote server)"
+        echo "  - https://freq.subx.fun             (domain name)"
+        read -p "Enter Freqtrade API URL: " FREQTRADE_API_URL_INPUT
+        if [ -n "$FREQTRADE_API_URL_INPUT" ]; then
+            FREQTRADE_API_URL="$FREQTRADE_API_URL_INPUT"
+        else
+            error "❌ Freqtrade API URL is required for app-only deployment"
+            exit 1
+        fi
+        info "✅ Freqtrade API URL set to: $FREQTRADE_API_URL"
+    fi
+
     # Get proxy configuration
     echo ""
     info "🌐 Proxy Configuration (for restricted countries)"
@@ -270,7 +311,7 @@ OPENAI_API_KEY=${OPENAI_KEY}
 OPENAI_BASE_URL=${OPENAI_BASE_URL}
 
 # Freqtrade API Configuration
-FREQTRADE_API_URL=http://freqtrade-bot:8080
+FREQTRADE_API_URL=${FREQTRADE_API_URL:-http://freqtrade-bot:8080}
 FREQTRADE_API_USERNAME=${FREQTRADE_USERNAME}
 FREQTRADE_API_PASSWORD=${FREQTRADE_PASSWORD}
 # FREQTRADE_API_TOKEN is intentionally not set here because WS token is not a JWT
@@ -373,13 +414,13 @@ docker network create traefik 2>/dev/null || echo "Network 'traefik' already exi
 
 # Build and start services
 info "🔨 Building and starting services..."
-docker-compose down --remove-orphans
+docker-compose -f $COMPOSE_FILE down --remove-orphans
 if [ "$NO_CACHE" = "1" ]; then
-  docker-compose build --no-cache
+  docker-compose -f $COMPOSE_FILE build --no-cache
 else
-  docker-compose build
+  docker-compose -f $COMPOSE_FILE build
 fi
-docker-compose up -d
+docker-compose -f $COMPOSE_FILE up -d
 
 # Wait for services to be ready
 info "⏳ Waiting for services to start..."
@@ -387,7 +428,7 @@ sleep 12
 
 # Check service status
 success "✅ Checking service status..."
-docker-compose ps
+docker-compose -f $COMPOSE_FILE ps
 
 # Restore database if needed
 restore_database
