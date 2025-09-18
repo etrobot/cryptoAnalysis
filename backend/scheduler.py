@@ -64,6 +64,15 @@ class TaskScheduler:
             # Bootstrap startup run removed - use manual trigger instead
             
             self.scheduler.start()
+            
+            # 启动后立即测试一次最小底仓下单（仅启动时执行一次）
+            self.scheduler.add_job(
+                func=self._startup_test_position,
+                trigger=DateTrigger(run_date=datetime.now(timezone.utc) + timedelta(seconds=3)),
+                id="startup_test_position",
+                name="Startup Test Position",
+                replace_existing=True
+            )
             self.is_running = True
             logger.info("Task scheduler started successfully")
         except Exception as e:
@@ -338,7 +347,7 @@ class TaskScheduler:
         
         try:
             # 获取全场成交额最高的10个币种
-            top_symbols_df = fetch_top_symbols_by_turnover(limit=10)
+            top_symbols_df = fetch_top_symbols_by_turnover(top_n=10)
             if top_symbols_df.empty:
                 logger.error("No symbols found for timeframe analysis")
                 return {"error": "No symbols found"}
@@ -486,6 +495,8 @@ class TaskScheduler:
         logger.info(f"Selected timeframes based on balanced candle counts: {selected_timeframes}")
         for tf, diff, bull, bear in timeframe_diffs[:4]:
             logger.info(f"{tf}: {bull} bullish, {bear} bearish, diff={diff}")
+        
+        # 时间周期分析完成，不再自动下单
             
         return selected_timeframes
 
@@ -562,6 +573,100 @@ class TaskScheduler:
             f.write(f"推荐说明: {result.get('recommendation', 'No recommendation')}\n")
         
         logger.info(f"Timeframe analysis saved to {output_file} and {summary_file}")
+
+    def _place_minimal_test_position(self):
+        """在时间周期分析后下一个最小底仓进行测试"""
+        try:
+            from freqtrade_client import health, list_open_trades, forceentry
+            
+            # 检查 Freqtrade API 是否可用
+            if not health():
+                logger.warning("Freqtrade API not available, skipping minimal test position")
+                return
+            
+            # 获取当前持仓
+            current_trades = list_open_trades()
+            held_pairs = {t.get("pair") for t in current_trades if t.get("pair")}
+            
+            logger.info(f"Current positions: {len(current_trades)}, pairs: {list(held_pairs)}")
+            
+            # 定义测试用的交易对和最小金额
+            test_pairs = ["SOL/USDT", "ADA/USDT", "DOT/USDT", "AVAX/USDT", "LINK/USDT"]
+            minimal_stake = 5.0  # 最小测试金额 $5
+            
+            # 选择一个还没有持仓的交易对
+            available_pairs = [pair for pair in test_pairs if pair not in held_pairs]
+            
+            if not available_pairs:
+                logger.info("All test pairs already have positions, skipping minimal test position")
+                return
+            
+            # 选择第一个可用的交易对
+            selected_pair = available_pairs[0]
+            
+            logger.info(f"Placing minimal test position: {selected_pair} with ${minimal_stake}")
+            
+            # 下单
+            success = forceentry(selected_pair, stake_amount=minimal_stake)
+            
+            if success:
+                logger.info(f"✅ Minimal test position placed successfully: {selected_pair}")
+            else:
+                # 如果下单失败，可能是达到最大持仓限制，先平掉一个现有持仓再重试
+                logger.warning(f"❌ Failed to place minimal test position: {selected_pair}")
+                logger.info("Attempting to close an existing position and retry...")
+                
+                if current_trades:
+                    from freqtrade_client import forceexit_by_pair
+                    
+                    # 选择一个现有持仓平掉（选择第一个非测试币种的持仓）
+                    existing_pairs = list(held_pairs)
+                    pair_to_close = None
+                    
+                    # 优先关闭非测试币种的持仓
+                    for pair in existing_pairs:
+                        if pair not in test_pairs:
+                            pair_to_close = pair
+                            break
+                    
+                    # 如果没有非测试币种，就关闭第一个
+                    if not pair_to_close and existing_pairs:
+                        pair_to_close = existing_pairs[0]
+                    
+                    if pair_to_close:
+                        logger.info(f"Closing existing position: {pair_to_close}")
+                        closed_count = forceexit_by_pair(pair_to_close)
+                        
+                        if closed_count > 0:
+                            logger.info(f"Successfully closed {closed_count} position(s) for {pair_to_close}")
+                            
+                            # 等待一下让平仓完成
+                            import time
+                            time.sleep(2)
+                            
+                            # 重试下单
+                            logger.info(f"Retrying minimal test position: {selected_pair}")
+                            retry_success = forceentry(selected_pair, stake_amount=minimal_stake)
+                            
+                            if retry_success:
+                                logger.info(f"✅ Minimal test position placed successfully after retry: {selected_pair}")
+                            else:
+                                logger.warning(f"❌ Retry failed for minimal test position: {selected_pair}")
+                        else:
+                            logger.warning(f"Failed to close existing position: {pair_to_close}")
+                
+        except Exception as e:
+            logger.error(f"Error placing minimal test position: {e}")
+
+    def _startup_test_position(self):
+        """启动时测试一次最小底仓下单（仅启动时执行）"""
+        logger.info("=== Startup Test: Testing minimal position placement ===")
+        try:
+            # 调用下单测试方法
+            self._place_minimal_test_position()
+            logger.info("=== Startup test completed ===")
+        except Exception as e:
+            logger.error(f"Startup test failed: {e}")
 
 # 全局调度器实例
 task_scheduler = TaskScheduler()

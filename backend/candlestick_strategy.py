@@ -174,7 +174,7 @@ class CandlestickStrategy:
                 min_length = candle_length
         reference_length = min_length
         
-        # 检查最新的10根K线是否为震荡走势(最长的K线短于三连阳中最长的K线)
+        # 检查最新的10根K线是否为震荡走势(最长的K线短于三连阳中最短的K线)
         is_sideways = self.is_sideways_movement(df, 0, 9, reference_length)
         
         if is_sideways:
@@ -202,7 +202,7 @@ class CandlestickStrategy:
                 min_length = candle_length
         reference_length = min_length
         
-        # 检查第4-13根K线是否为震荡走势(最长的K线短于三连阴中最长的K线)
+        # 检查第4-13根K线是否为震荡走势(最长的K线短于三连阴中最短的K线)
         is_sideways = self.is_sideways_movement(df, 3, 12, reference_length)
         
         if is_sideways:
