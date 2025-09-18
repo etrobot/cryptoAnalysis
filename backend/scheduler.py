@@ -281,8 +281,6 @@ class TaskScheduler:
             # 运行K线策略
             result = run_candlestick_strategy(task_id)
             
-            logger.info(f"Candlestick strategy completed: {result}")
-            
         except Exception as e:
             logger.error(f"Candlestick strategy failed: {e}")
         finally:
