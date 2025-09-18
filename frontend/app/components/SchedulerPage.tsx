@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { SchedulerOverviewCard, formatDateTime } from './SchedulerOverviewCard'
 import { SchedulerTaskCard } from './SchedulerTaskCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AuthDialog } from './AuthDialog'
 import {
   Clock,
   Play,
@@ -51,14 +52,20 @@ export function SchedulerPage() {
   const [timeframeAnalysis, setTimeframeAnalysis] = useState<TimeframeAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
   const { isAuthenticated } = useAuth()
 
   const requireAuth = (action: () => void) => {
     if (!isAuthenticated) {
-      setError('请先登录后再执行此操作')
+      setShowAuthDialog(true)
       return
     }
     action()
+  }
+
+  const handleAuthSuccess = () => {
+    setError(null)
+    // 认证成功后可以执行之前被阻止的操作
   }
 
   const fetchSchedulerStatus = async (): Promise<SchedulerStatusDTO | null> => {
@@ -184,18 +191,17 @@ export function SchedulerPage() {
           <Button
             variant={schedulerStatus?.enabled ? "destructive" : "default"}
             onClick={() => requireAuth(() => toggleScheduler(!schedulerStatus?.enabled))}
-            disabled={!isAuthenticated}
           >
             {schedulerStatus?.enabled ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
             {schedulerStatus?.enabled ? '禁用' : '启用'}定时任务
           </Button>
 
-          <Button variant="outline" onClick={() => requireAuth(stopCurrentTasks)} disabled={!isAuthenticated}>
+          <Button variant="outline" onClick={() => requireAuth(stopCurrentTasks)}>
             <XCircle className="h-4 w-4 mr-2" />
             停止当前任务
           </Button>
 
-          <Button variant="outline" onClick={() => requireAuth(async () => { setLoading(true); await fetchTimeframeAnalysis(); startSSE(); })} disabled={!isAuthenticated}>
+          <Button variant="outline" onClick={() => requireAuth(async () => { setLoading(true); await fetchTimeframeAnalysis(); startSSE(); })}>
             <RefreshCw className="h-4 w-4 mr-2" />
             刷新
           </Button>
@@ -416,6 +422,14 @@ export function SchedulerPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      <AuthDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        onSuccess={handleAuthSuccess}
+        title="身份验证"
+        description="请先登录后再执行定时任务操作"
+      />
     </div>
   )
 }

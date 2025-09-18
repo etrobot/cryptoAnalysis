@@ -57,37 +57,11 @@ if [ ! -f "user_data/strategies/ExternalSignalStrategy.py" ]; then
   exit 1
 fi
 
-# Generate secure credentials
-generate_api_credentials
-
+# Check if config file exists first
 if [ ! -f "user_data/config_external_signals.json" ]; then
   error "❌ Missing config file: user_data/config_external_signals.json"
   error "❌ Please create your Freqtrade configuration before deployment"
   exit 1
-else
-  info "🔧 Updating existing Freqtrade config with generated security credentials..."
-  # Don't regenerate credentials - use the ones already generated above
-  
-  # Backup existing config
-  cp user_data/config_external_signals.json user_data/config_external_signals.json.backup.$(date +%Y%m%d_%H%M%S)
-  
-  # Update existing config with new credentials using jq if available, otherwise manual replacement
-  if command_exists jq; then
-    jq --arg username "$FREQTRADE_USERNAME" \
-       --arg password "$FREQTRADE_PASSWORD" \
-       --arg jwt_secret "$JWT_SECRET" \
-       --arg ws_token "$WS_TOKEN" \
-       '.api_server.username = $username | 
-        .api_server.password = $password | 
-        .api_server.jwt_secret_key = $jwt_secret | 
-        .api_server.ws_token = [$ws_token] |
-        .api_server.CORS_origins = ["http://localhost:3000", "http://localhost:14250", "https://btc.subx.fun", "https://ftui.subx.fun"]' \
-       user_data/config_external_signals.json > user_data/config_temp.json && \
-    mv user_data/config_temp.json user_data/config_external_signals.json
-    success "✅ Updated existing config with new security credentials"
-  else
-    warn "⚠️  jq not available - please manually update API credentials in user_data/config_external_signals.json"
-  fi
 fi
 
 # Check if .env file already exists first
@@ -114,17 +88,66 @@ if [ -f ".env" ]; then
         
         # Skip credential input if keeping existing .env
         SKIP_ENV_CREATION=true
+        SKIP_CREDENTIAL_GENERATION=true
     else
         info "💾 Backing up existing .env file..."
-        cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
-        success "✅ Backup created: .env.backup.$(date +%Y%m%d_%H%M%S)"
+        # Create clean backup name without stacking timestamps
+        BACKUP_NAME=".env.backup.$(date +%Y%m%d_%H%M%S)"
+        cp .env "$BACKUP_NAME"
+        success "✅ Backup created: $BACKUP_NAME"
         echo ""
         info "📋 You can copy any values you want to keep from above and paste them when prompted."
         echo ""
         SKIP_ENV_CREATION=false
+        SKIP_CREDENTIAL_GENERATION=false
     fi
 else
     SKIP_ENV_CREATION=false
+    SKIP_CREDENTIAL_GENERATION=false
+fi
+
+# Generate credentials only if needed
+if [ "$SKIP_CREDENTIAL_GENERATION" != "true" ]; then
+    generate_api_credentials
+else
+    # Read existing credentials from .env file
+    if [ -f ".env" ]; then
+        info "🔧 Reading existing credentials from .env file..."
+        FREQTRADE_USERNAME=$(grep "^FREQTRADE_API_USERNAME=" .env | cut -d'=' -f2)
+        FREQTRADE_PASSWORD=$(grep "^FREQTRADE_API_PASSWORD=" .env | cut -d'=' -f2)
+        JWT_SECRET=$(grep "^JWT_SECRET_KEY=" .env | cut -d'=' -f2)
+        WS_TOKEN=$(grep "^WS_TOKEN=" .env | cut -d'=' -f2)
+        success "✅ Loaded existing credentials from .env"
+    fi
+fi
+
+# Update Freqtrade config with credentials (either new or existing)
+if [ -f "user_data/config_external_signals.json" ] && [ -n "$FREQTRADE_USERNAME" ]; then
+    info "🔧 Updating Freqtrade config with credentials..."
+    
+    # Create clean backup name without stacking timestamps
+    if [ -f "user_data/config_external_signals.json.backup" ]; then
+        rm -f user_data/config_external_signals.json.backup
+    fi
+    cp user_data/config_external_signals.json user_data/config_external_signals.json.backup
+    
+    # Update existing config with credentials using jq if available
+    if command_exists jq; then
+        jq --arg username "$FREQTRADE_USERNAME" \
+           --arg password "$FREQTRADE_PASSWORD" \
+           --arg jwt_secret "$JWT_SECRET" \
+           --arg ws_token "$WS_TOKEN" \
+           '.api_server.username = $username | 
+            .api_server.password = $password | 
+            .api_server.jwt_secret_key = $jwt_secret | 
+            .api_server.ws_token = [$ws_token] |
+            .api_server.CORS_origins = ["http://localhost:3000", "http://localhost:14250", "https://btc.subx.fun", "https://ftui.subx.fun"]' \
+           user_data/config_external_signals.json > user_data/config_temp.json && \
+        mv user_data/config_temp.json user_data/config_external_signals.json
+        success "✅ Updated Freqtrade config with credentials"
+    else
+        warn "⚠️  jq not available - please manually update API credentials in user_data/config_external_signals.json"
+    fi
 fi
 
 # Get configuration only if we need to create/update .env
@@ -151,6 +174,12 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         # Update user_data config with manually entered credentials
         if [ -f "user_data/config_external_signals.json" ] && command_exists jq; then
             info "🔧 Updating Freqtrade config with manually entered credentials..."
+            # Create clean backup name without stacking timestamps
+            if [ -f "user_data/config_external_signals.json.backup" ]; then
+                rm -f user_data/config_external_signals.json.backup
+            fi
+            cp user_data/config_external_signals.json user_data/config_external_signals.json.backup
+            
             jq --arg username "$FREQTRADE_USERNAME" \
                --arg password "$FREQTRADE_PASSWORD" \
                --arg jwt_secret "$JWT_SECRET" \
@@ -261,10 +290,12 @@ fi
 # Backup existing database if it exists
 backup_database() {
   local db_path="./data/crypto_data.db"
-  local backup_path="./data/crypto_data.db.backup.$(date +%Y%m%d_%H%M%S)"
+  local backup_path="./data/crypto_data.db.backup"
   
   if [ -f "$db_path" ]; then
     info "💾 Backing up existing database..."
+    # Remove old backup if it exists to avoid stacking names
+    [ -f "$backup_path" ] && rm -f "$backup_path"
     cp "$db_path" "$backup_path"
     success "✅ Database backed up to: $backup_path"
     echo "$backup_path" > ./data/.last_backup_path

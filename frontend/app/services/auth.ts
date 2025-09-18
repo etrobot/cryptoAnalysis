@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+
 // 认证服务
 export class AuthService {
   private static readonly AUTH_TOKEN_KEY = 'auth_token'
@@ -35,6 +37,8 @@ export class AuthService {
     sessionStorage.removeItem(this.AUTH_TOKEN_KEY)
     sessionStorage.removeItem(this.AUTH_TIME_KEY)
     sessionStorage.removeItem(this.USER_INFO_KEY)
+    // 触发自定义事件通知状态变化
+    window.dispatchEvent(new Event('authStateChanged'))
   }
 
   /**
@@ -44,6 +48,8 @@ export class AuthService {
     sessionStorage.setItem(this.AUTH_TOKEN_KEY, token)
     sessionStorage.setItem(this.AUTH_TIME_KEY, Date.now().toString())
     sessionStorage.setItem(this.USER_INFO_KEY, JSON.stringify(userInfo))
+    // 触发自定义事件通知状态变化
+    window.dispatchEvent(new Event('authStateChanged'))
   }
 
   /**
@@ -142,22 +148,54 @@ export class AuthService {
 
 // 认证状态管理Hook
 export function useAuth() {
-  const isAuthenticated = AuthService.isAuthenticated()
+  const [isAuthenticated, setIsAuthenticated] = useState(AuthService.isAuthenticated())
+  
+  // 监听存储变化来更新认证状态
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setIsAuthenticated(AuthService.isAuthenticated())
+    }
+    
+    // 监听 sessionStorage 变化
+    window.addEventListener('storage', handleStorageChange)
+    
+    // 由于 sessionStorage 在同一标签页内不会触发 storage 事件，
+    // 我们需要自定义事件来处理
+    window.addEventListener('authStateChanged', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('authStateChanged', handleStorageChange)
+    }
+  }, [])
   
   const clearAuth = () => {
     AuthService.clearAuth()
+    setIsAuthenticated(false)
+    window.dispatchEvent(new Event('authStateChanged'))
   }
 
   const setAuth = (token: string, userInfo: { name?: string; email: string }) => {
     AuthService.setAuth(token, userInfo)
+    setIsAuthenticated(true)
+    window.dispatchEvent(new Event('authStateChanged'))
+  }
+
+  const authenticate = async (username: string, email: string) => {
+    const result = await AuthService.authenticate(username, email)
+    if (result.success) {
+      setIsAuthenticated(true)
+      window.dispatchEvent(new Event('authStateChanged'))
+    }
+    return result
   }
 
   return {
     isAuthenticated,
     clearAuth,
     setAuth,
+    authenticate,
     getUserInfo: AuthService.getUserInfo,
-    authenticate: AuthService.authenticate,
     getRemainingTime: AuthService.getRemainingSessionTime
   }
 }
